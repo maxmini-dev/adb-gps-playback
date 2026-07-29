@@ -1,36 +1,117 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# adb-gps-playback
 
-## Getting Started
+Stream simulated GPS fixes to a running Android emulator along a GTFS route.
+Load a GTFS feed in-browser, pick trips, tweak their polylines, then scrub
+and play — the app forwards positions to `adb emu geo fix` so any Android
+app running in the emulator sees them as real location updates.
 
-First, run the development server:
+## Prerequisites
+
+- Node.js 20+
+- The `adb` binary from the Android SDK (`platform-tools`)
+- A running Android emulator (`emulator -avd <name>` or via Android Studio)
+
+## Setup
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+If `adb` isn't on your PATH, point at it explicitly when you start the server:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+ADB_PATH=~/Library/Android/sdk/platform-tools/adb npm run dev
+```
 
-## Learn More
+Verify the server can reach the emulator:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+curl http://localhost:3000/api/adb
+# expected: {"adb":"adb","code":0,"stdout":"List of devices attached\nemulator-5554\tdevice",...}
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+If more than one device is attached, put the serial (e.g. `emulator-5554`)
+into the "serial" box on the Play screen so fixes only go to that emulator.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Usage
 
-## Deploy on Vercel
+1. **Load** — drop a GTFS `.zip`. Routes and trips are listed; hit **Stage** on
+   any trip you want to replay. If the feed's `shapes.txt` is missing or empty,
+   trip polylines are synthesized from `stops.txt` + `stop_times.txt`.
+2. **Edit** — pick a staged route to see its polyline on the map.
+   - **Drag** a point to move it
+   - **Click** the line to insert a new point at that location
+   - **Right-click** a point to delete it
+   - **Reset** in the sidebar restores the original GTFS geometry
+3. **Play** — hit Play. Scrub with the range slider, adjust base speed (m/s)
+   and a multiplier (0.5×–20×). The app POSTs the current interpolated
+   position to `/api/adb` ~4×/sec, which shells out to `adb emu geo fix`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Staged routes and player state persist across reloads via `localStorage`.
+The raw GTFS feed does not — reload it if you refresh with no staged routes.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Architecture
+
+```mermaid
+flowchart LR
+  User([User])
+  Zip[GTFS .zip]
+
+  subgraph Browser
+    Load[/load view/]
+    Edit[/edit view<br/>EditorMap]
+    Play[/play view<br/>PlayerMap]
+    Loop{{Playback loop<br/>requestAnimationFrame}}
+    Store[(Zustand store<br/>routes + player<br/>localStorage)]
+  end
+
+  subgraph Server[Next.js server]
+    API[/api/adb<br/>Route Handler/]
+  end
+
+  ADB[[adb emu geo fix]]
+  Emu[Android emulator]
+
+  User -->|drops zip| Load
+  Zip -->|jszip + papaparse| Load
+  Load -->|setGtfs / addRouteFromTrip| Store
+  Store --> Edit
+  Store --> Play
+  Edit -->|drag / insert / delete<br/>waypoints| Store
+  Play --> Loop
+  Loop -->|interpolate along polyline| Store
+  Loop -->|POST lat,lon| API
+  API -->|spawn| ADB
+  ADB -->|geo fix| Emu
+```
+
+Key modules:
+
+| Path | Responsibility |
+| --- | --- |
+| `lib/gtfs.ts` | Parse GTFS zip; synthesize per-trip shapes from stops when missing |
+| `lib/geo.ts` | Haversine, cumulative distances, `pointAtDistance` interpolation |
+| `lib/store.ts` | Zustand store; persists `routes` + `player` (not raw GTFS) |
+| `app/api/adb/route.ts` | Shells out to `adb emu geo fix <lon> <lat>` (resolves `ADB_PATH` or PATH) |
+| `app/components/EditorMap.tsx` | Leaflet map with draggable / click-to-insert / right-click-to-delete waypoints |
+| `app/components/PlayerMap.tsx` | Read-only map with route + moving position marker, optional auto-pan |
+
+## API
+
+`POST /api/adb`
+
+```json
+{ "lat": 36.868446, "lon": -116.784582, "serial": "emulator-5554" }
+```
+
+- `serial` is optional; if provided, invokes `adb -s <serial> emu geo fix …`.
+- Returns `{ "ok": true }` on success, or `{ "error": "...", "stderr": "..." }` on failure.
+
+`GET /api/adb` — health check that runs `adb devices` and returns the output.
+
+## Tech
+
+Next.js App Router · TypeScript · Zustand · Leaflet + react-leaflet · JSZip · PapaParse · OpenStreetMap tiles.
