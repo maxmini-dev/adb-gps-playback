@@ -58,29 +58,29 @@ The raw GTFS feed does not — reload it if you refresh with no staged routes.
 ```mermaid
 flowchart LR
   User([User])
-  Zip[GTFS .zip]
+  Zip["GTFS .zip"]
 
   subgraph Browser
-    Load[/load view/]
-    Edit[/edit view<br/>EditorMap]
-    Play[/play view<br/>PlayerMap]
-    Loop{{Playback loop<br/>requestAnimationFrame}}
-    Store[(Zustand store<br/>routes + player<br/>localStorage)]
+    Load["/load view"]
+    Edit["/edit view<br/>EditorMap"]
+    Play["/play view<br/>PlayerMap"]
+    Loop{{"Playback loop<br/>requestAnimationFrame"}}
+    Store[("Zustand store<br/>routes + player<br/>localStorage")]
   end
 
-  subgraph Server[Next.js server]
-    API[/api/adb<br/>Route Handler/]
+  subgraph Server ["Next.js server"]
+    API["/api/adb<br/>Route Handler"]
   end
 
-  ADB[[adb emu geo fix]]
-  Emu[Android emulator]
+  ADB[["adb emu geo fix"]]
+  Emu["Android emulator"]
 
   User -->|drops zip| Load
   Zip -->|jszip + papaparse| Load
   Load -->|setGtfs / addRouteFromTrip| Store
   Store --> Edit
   Store --> Play
-  Edit -->|drag / insert / delete<br/>waypoints| Store
+  Edit -->|drag / insert / delete waypoints| Store
   Play --> Loop
   Loop -->|interpolate along polyline| Store
   Loop -->|POST lat,lon| API
