@@ -49,8 +49,8 @@ Permissions: `ACCESS_FINE_LOCATION` (the location FGS type requires it on API
 | 1 | Prove mocking on a device: Setup screen with checklist + **Send test fix** | 🟡 Code written. **Needs a check on a real device and an emulator**, with and without the fused toggle, in Google Maps |
 | 2 | `:core` engine (geo port, bearing, jitter) + `PlaybackService` + notification controls | 🟡 Code written. `:core` has 16 passing unit tests; the service hasn't been run yet |
 | 3 | GTFS import (SAF picker, streaming parser) + staging + persistence | 🟡 Code written. Parser is unit tested; UI not yet run |
-| 4 | Play screen: controls ✅; **map** with route + moving marker + auto-pan ⬜ | 🟡 Partly done |
-| 5 | Editor screen: drag waypoint, tap segment to insert, long-press to delete, reset | ⬜ Not started |
+| 4 | Play screen: controls + MapLibre map with route, heading-arrow position marker, auto-pan | 🟡 Code written. The map controller type-checks against the real Android + MapLibre classes; not yet run |
+| 5 | Editor screen: drag waypoint, tap near the line to insert, long-press to delete, reset | 🟡 Code written. Edit ops and hit testing are unit tested (24 `:core` tests total); gestures not yet tried on a device |
 | 6 | Polish: battery-optimization exemption prompt, tick-rate setting in UI, a real launcher icon | ⬜ Not started |
 
 The first commit was written in an environment without access to Google's
@@ -59,14 +59,27 @@ AndroidX, Compose BOM and Play Services versions in `gradle/libs.versions.toml`
 are best guesses. Open `android/` in Android Studio, let it bump versions if
 sync complains, and fix any compile errors before moving on to phase 4.
 
-## Open decisions
+## Map (phases 4–5)
 
-- **Map library (phases 4–5).** The default is **osmdroid**: OSM tiles with no
-  API key, and draggable `Marker`s built in, which keeps the editor simple.
-  Before adopting it, check that it's still maintained. The fallback is
-  **MapLibre Native** with an OSM raster style; it's more actively developed
-  but needs hand-written drag handling on GeoJSON layers. Either way, set a
-  descriptive User-Agent to follow the OSM tile usage policy.
+- **Library:** MapLibre Native (`org.maplibre.gl:android-sdk`, from Maven
+  Central) with an inline OpenStreetMap raster style. There's no API key, and
+  an OkHttp interceptor sets an identifying User-Agent, as the OSM tile policy
+  requires.
+- **Layers:** route line, waypoint circles (edit mode only), and a position
+  symbol rotated to the bearing (a dot when the bearing is unknown). All are
+  GeoJSON sources fed by strings from `:core`'s `GeoJson`.
+- **Editing:** a touch listener on the `MapView` takes over any gesture that
+  starts within 24 dp of a waypoint. Dragging moves the point, long-pressing
+  deletes it, and everything else falls through to normal map panning and
+  zooming. A tap within 32 dp of the line inserts a point into the nearest
+  segment.
+- **Differences from the web editor:**
+  - Deleting is a long-press instead of a right-click.
+  - Inserting only happens for taps near the line; the web app inserts
+    wherever you click. That avoids stray points from taps on a touchscreen.
+    Worth porting the proximity check to the web app too, if wanted.
+
+## Open decisions
 - **Route exchange with the web app.** Not planned. If it's wanted later, a
   JSON export/import that matches the web store's `routes` shape would let you
   copy edited routes between the two apps.

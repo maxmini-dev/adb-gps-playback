@@ -9,7 +9,8 @@ independent apps:
 | Target | Android **emulator** | Real device **or** emulator |
 | Mechanism | `adb emu geo fix` | `LocationManager` test providers (+ Play Services mock mode) |
 | Keeps playing in background | n/a (browser tab drives it) | Yes, foreground service with notification controls |
-| Extras | Map editor for route waypoints | Bearing/speed/accuracy, GPS jitter |
+| Route editor | Leaflet: drag, click to insert, right-click to delete | MapLibre: drag, tap line to insert, long-press to delete |
+| Extras | — | Bearing/speed/accuracy, GPS jitter |
 
 Both load a GTFS `.zip`, let you stage trips (building polylines from stops when
 `shapes.txt` is missing), and play them back at a configurable speed.

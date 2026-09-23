@@ -31,6 +31,7 @@ import dev.maxmini.gpsplayback.AppStore
 private enum class Tab(val label: String, val glyph: String) {
     Setup("Setup", "⚙"),
     Load("Load", "⇪"),
+    Edit("Edit", "✎"),
     Play("Play", "▶"),
 }
 
@@ -76,7 +77,8 @@ private fun AppContent(resumeCount: Int) {
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
                 Tab.Setup -> SetupScreen(resumeCount)
-                Tab.Load -> LoadScreen(onStaged = { tab = Tab.Play })
+                Tab.Load -> LoadScreen(onStaged = { tab = Tab.Edit })
+                Tab.Edit -> EditScreen(onNeedRoute = { tab = Tab.Load }, onPlay = { tab = Tab.Play })
                 Tab.Play -> PlayScreen(onNeedRoute = { tab = Tab.Load })
             }
         }

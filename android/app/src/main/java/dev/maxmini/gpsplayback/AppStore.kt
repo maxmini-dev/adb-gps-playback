@@ -2,6 +2,8 @@ package dev.maxmini.gpsplayback
 
 import android.content.Context
 import android.util.Log
+import dev.maxmini.gpsplayback.core.edit.RouteEdit
+import dev.maxmini.gpsplayback.core.edit.applyEdit
 import dev.maxmini.gpsplayback.core.model.EditableRoute
 import dev.maxmini.gpsplayback.core.model.GtfsData
 import dev.maxmini.gpsplayback.core.model.PlayerState
@@ -85,6 +87,19 @@ object AppStore {
         val route = _gtfs.value?.editableRouteFor(tripId) ?: return
         _routes.update { it + (route.id to route) }
         save()
+    }
+
+    /** Apply a waypoint edit (move / insert / delete / reset) to a staged route. */
+    fun editRoute(id: String, edit: RouteEdit) {
+        var changed = false
+        _routes.update { routes ->
+            val route = routes[id] ?: return@update routes
+            val next = route.applyEdit(edit)
+            if (next === route) return@update routes
+            changed = true
+            routes + (id to next)
+        }
+        if (changed) save()
     }
 
     fun removeRoute(id: String) {

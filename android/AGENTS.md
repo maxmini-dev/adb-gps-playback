@@ -20,6 +20,9 @@ through adb. Sideload-only personal tool, so there is no Play Store policy work.
   - `mock/MockLocationSink`: test-provider setup, pushing fixes, cleanup.
   - `playback/PlaybackService`: the foreground service (`type=location`) that
     owns the clock, the tick loop and the notification controls.
+  - `ui/map/`: MapLibre. `RouteMapController` owns the `MapView` and edit
+    gestures and has **no Compose imports**, so it can be type-checked on its
+    own. `RouteMap` is the thin Compose wrapper around it.
   - `ui/`: Compose screens.
 
 ## Ground rules
@@ -39,6 +42,14 @@ through adb. Sideload-only personal tool, so there is no Play Store policy work.
 - **GTFS shapes are optional.** Keep the stop-based fallback in
   `GtfsParser` (it mirrors `web/lib/gtfs.ts`). Stream `stop_times.txt` and only
   read it when some trip needs the fallback, because it can be hundreds of MB.
+- **The map renders what it's given.** Edit gestures emit `RouteEdit`s, and
+  `AppStore.editRoute` applies them. The controller only draws a live preview
+  while dragging. Layer data is GeoJSON built in `:core` (`GeoJson`), and hit
+  testing is in `:core` too (`edit/HitTest.kt`), so both are unit tested.
+- **MapView lifecycle must be forwarded** (start / resume / pause / stop / destroy).
+  `RouteMap` does this. Don't create a `MapView` anywhere else.
+- **OSM tiles need an identifying User-Agent** (`MapSetup.kt`). Keep it if you
+  change the HTTP client.
 - **Keep dependencies minimal.** No icon libraries or UI kits beyond Material 3,
   no navigation library, no DI framework. Icons are hand-written vector
   drawables in `res/drawable`.

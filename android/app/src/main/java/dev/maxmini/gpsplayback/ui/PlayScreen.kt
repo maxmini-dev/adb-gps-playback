@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -20,18 +18,18 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.maxmini.gpsplayback.AppStore
+import dev.maxmini.gpsplayback.core.geo.bearingAtDistance
 import dev.maxmini.gpsplayback.core.geo.cumulativeDistances
 import dev.maxmini.gpsplayback.core.geo.pointAtDistance
 import dev.maxmini.gpsplayback.core.playback.PlaybackEngine
 import dev.maxmini.gpsplayback.playback.PlaybackService
+import dev.maxmini.gpsplayback.ui.map.RouteMap
 import java.text.DateFormat
 import java.util.Date
 
@@ -58,108 +56,104 @@ fun PlayScreen(onNeedRoute: () -> Unit) {
     val cum = remember(route.waypoints) { cumulativeDistances(route.waypoints) }
     val total = cum.last()
     val position = pointAtDistance(route.waypoints, cum, player.progressMeters)
+    val bearing = bearingAtDistance(route.waypoints, cum, player.progressMeters)
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        RoutePicker(route.label, routes.values.map { it.id to it.label }) { id ->
-            if (id != route.id) {
-                PlaybackService.stop(context)
-                AppStore.setPlayer { it.copy(routeId = id, progressMeters = 0.0, playing = false) }
-            }
-        }
-        Muted("%.2f km · %d pts".format(total / 1000, route.waypoints.size))
-
-        // TODO(phase 4): replace with the osmdroid PlayerMap.
-        Section("Position") {
-            Text("%.6f, %.6f".format(position.lat, position.lon))
-            Muted("%.2f / %.2f km".format(player.progressMeters / 1000, total / 1000))
-            Slider(
-                value = player.progressMeters.toFloat(),
-                onValueChange = { v -> AppStore.setPlayer(persist = false) { it.copy(progressMeters = v.toDouble()) } },
-                onValueChangeFinished = { AppStore.save() },
-                valueRange = 0f..maxOf(total.toFloat(), 1f),
-            )
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (player.playing) {
-                Button(onClick = { PlaybackService.pause(context) }) { Text("Pause") }
-            } else {
-                Button(onClick = { PlaybackService.play(context) }) { Text("Play") }
-            }
-            OutlinedButton(enabled = status.serviceRunning, onClick = { PlaybackService.stop(context) }) {
-                Text("Stop mocking")
-            }
-        }
-        StatusLine(status.serviceRunning, status.lastError, status.lastSentAt)
-
-        Section("Speed") {
-            val kmh = PlaybackEngine.effectiveSpeed(player) * 3.6
-            Muted("Base %.1f m/s × %s = %.0f km/h".format(player.baseSpeedMps, fmtMultiplier(player.speedMultiplier), kmh))
-            Slider(
-                value = player.baseSpeedMps.toFloat(),
-                onValueChange = { v -> AppStore.setPlayer(persist = false) { it.copy(baseSpeedMps = v.toDouble()) } },
-                onValueChangeFinished = { AppStore.save() },
-                valueRange = 1f..40f,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                MULTIPLIERS.forEach { m ->
-                    val selected = m == player.speedMultiplier
-                    val onClick = { AppStore.setPlayer { it.copy(speedMultiplier = m) } }
-                    if (selected) Button(onClick = onClick) { Text(fmtMultiplier(m)) }
-                    else TextButton(onClick = onClick) { Text(fmtMultiplier(m)) }
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)) {
+            RoutePicker(route.label, routes.values.map { it.id to it.label }) { id ->
+                if (id != route.id) {
+                    PlaybackService.stop(context)
+                    AppStore.setPlayer { it.copy(routeId = id, progressMeters = 0.0, playing = false) }
                 }
             }
         }
-
-        Section("GPS jitter") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Simulate receiver noise")
-                    Muted("Slowly drifting error, σ = %.0f m per axis".format(player.jitter.sigmaMeters))
+        RouteMap(
+            routeKey = route.id,
+            waypoints = route.waypoints,
+            position = position,
+            bearing = bearing,
+            autoPan = player.autoPan,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        )
+        Column(
+            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (player.playing) {
+                    Button(onClick = { PlaybackService.pause(context) }) { Text("Pause") }
+                } else {
+                    Button(onClick = { PlaybackService.play(context) }) { Text("Play") }
                 }
-                Switch(
-                    checked = player.jitter.enabled,
-                    onCheckedChange = { v -> AppStore.setPlayer { it.copy(jitter = it.jitter.copy(enabled = v)) } },
+                OutlinedButton(enabled = status.serviceRunning, onClick = { PlaybackService.stop(context) }) {
+                    Text("Stop mocking")
+                }
+            }
+            StatusLine(status.serviceRunning, status.lastError, status.lastSentAt)
+
+            Section("Position") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Keep map centered on position", Modifier.weight(1f))
+                    Switch(checked = player.autoPan, onCheckedChange = { v -> AppStore.setPlayer { it.copy(autoPan = v) } })
+                }
+                Muted(
+                    "%.6f, %.6f · %.2f / %.2f km · %d pts".format(
+                        position.lat, position.lon, player.progressMeters / 1000, total / 1000, route.waypoints.size,
+                    ),
+                )
+                Slider(
+                    value = player.progressMeters.toFloat().coerceAtMost(total.toFloat()),
+                    onValueChange = { v -> AppStore.setPlayer(persist = false) { it.copy(progressMeters = v.toDouble()) } },
+                    onValueChangeFinished = { AppStore.save() },
+                    valueRange = 0f..maxOf(total.toFloat(), 1f),
                 )
             }
-            Slider(
-                enabled = player.jitter.enabled,
-                value = player.jitter.sigmaMeters.toFloat(),
-                onValueChange = { v ->
-                    AppStore.setPlayer(persist = false) { it.copy(jitter = it.jitter.copy(sigmaMeters = v.toDouble())) }
-                },
-                onValueChangeFinished = { AppStore.save() },
-                valueRange = 1f..30f,
-            )
-        }
 
-        TextButton(onClick = {
-            PlaybackService.stop(context)
-            AppStore.removeRoute(route.id)
-        }) { Text("Remove this route") }
+            Section("Speed") {
+                val kmh = PlaybackEngine.effectiveSpeed(player) * 3.6
+                Muted("Base %.1f m/s × %s = %.0f km/h".format(player.baseSpeedMps, fmtMultiplier(player.speedMultiplier), kmh))
+                Slider(
+                    value = player.baseSpeedMps.toFloat(),
+                    onValueChange = { v -> AppStore.setPlayer(persist = false) { it.copy(baseSpeedMps = v.toDouble()) } },
+                    onValueChangeFinished = { AppStore.save() },
+                    valueRange = 1f..40f,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    MULTIPLIERS.forEach { m ->
+                        val selected = m == player.speedMultiplier
+                        val onClick = { AppStore.setPlayer { it.copy(speedMultiplier = m) } }
+                        if (selected) Button(onClick = onClick) { Text(fmtMultiplier(m)) }
+                        else TextButton(onClick = onClick) { Text(fmtMultiplier(m)) }
+                    }
+                }
+            }
+
+            Section("GPS jitter") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Simulate receiver noise")
+                        Muted("Slowly drifting error, σ = %.0f m per axis".format(player.jitter.sigmaMeters))
+                    }
+                    Switch(
+                        checked = player.jitter.enabled,
+                        onCheckedChange = { v -> AppStore.setPlayer { it.copy(jitter = it.jitter.copy(enabled = v)) } },
+                    )
+                }
+                Slider(
+                    enabled = player.jitter.enabled,
+                    value = player.jitter.sigmaMeters.toFloat(),
+                    onValueChange = { v ->
+                        AppStore.setPlayer(persist = false) { it.copy(jitter = it.jitter.copy(sigmaMeters = v.toDouble())) }
+                    },
+                    onValueChangeFinished = { AppStore.save() },
+                    valueRange = 1f..30f,
+                )
+            }
+        }
     }
 }
 
 private fun fmtMultiplier(m: Double) = if (m % 1.0 == 0.0) "${m.toInt()}×" else "$m×"
-
-@Composable
-private fun RoutePicker(current: String, options: List<Pair<String, String>>, onPick: (String) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(current, Modifier.weight(1f))
-            Text("▾")
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            options.forEach { (id, label) ->
-                DropdownMenuItem(text = { Text(label) }, onClick = { open = false; onPick(id) })
-            }
-        }
-    }
-}
 
 @Composable
 private fun StatusLine(running: Boolean, error: String?, lastSentAt: Long?) {
