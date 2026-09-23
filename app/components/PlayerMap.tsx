@@ -10,7 +10,9 @@ import {
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { positionIcon } from "./leaflet-setup";
+import { useStore } from "@/lib/store";
 import type { LatLon } from "@/lib/types";
+import { TILE_LAYERS } from "@/lib/theme";
 
 function FitBoundsOnce({ points }: { points: LatLon[] }) {
   const map = useMap();
@@ -50,6 +52,7 @@ export default function PlayerMap({
   position: LatLon | null;
   autoPan: boolean;
 }) {
+  const tiles = TILE_LAYERS[useStore((s) => s.theme)];
   const positions = useMemo(
     () => waypoints.map((p) => [p.lat, p.lon] as [number, number]),
     [waypoints],
@@ -64,9 +67,11 @@ export default function PlayerMap({
       zoom={13}
       style={{ height: "100%", width: "100%" }}
     >
+      {/* key remounts the layer so a theme switch swaps tile sources. */}
       <TileLayer
-        attribution='&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>'
-        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        key={tiles.url}
+        attribution={tiles.attribution}
+        url={tiles.url}
       />
       <FitBoundsOnce points={waypoints} />
       <Polyline

@@ -14,6 +14,7 @@ import "leaflet/dist/leaflet.css";
 import { waypointIcon } from "./leaflet-setup";
 import { useStore } from "@/lib/store";
 import type { LatLon } from "@/lib/types";
+import { TILE_LAYERS } from "@/lib/theme";
 
 function FitBoundsOnce({ points }: { points: LatLon[] }) {
   const map = useMap();
@@ -73,6 +74,7 @@ export default function EditorMap({ routeId }: { routeId: string }) {
   const waypoints = useStore((s) => s.routes[routeId]?.waypoints ?? []);
   const updateWaypoint = useStore((s) => s.updateWaypoint);
   const deleteWaypoint = useStore((s) => s.deleteWaypoint);
+  const tiles = TILE_LAYERS[useStore((s) => s.theme)];
 
   const positions = useMemo(
     () => waypoints.map((p) => [p.lat, p.lon] as [number, number]),
@@ -90,9 +92,11 @@ export default function EditorMap({ routeId }: { routeId: string }) {
       zoom={13}
       style={{ height: "100%", width: "100%" }}
     >
+      {/* key remounts the layer so a theme switch swaps tile sources. */}
       <TileLayer
-        attribution='&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>'
-        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        key={tiles.url}
+        attribution={tiles.attribution}
+        url={tiles.url}
       />
       <FitBoundsOnce points={waypoints} />
       <Polyline

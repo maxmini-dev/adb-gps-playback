@@ -5,6 +5,7 @@
  *   default          — neutral slate/blue, follows OS light/dark
  *   [data-theme=console]  "Night Ops"  — dark ops console, phosphor green, mono
  *   [data-theme=signage]  "Wayfinding" — transit signage, black/yellow, bold
+ *   [data-theme=topo]     "Contour"    — field-guide topo map, evergreen/lichen
  * The theme is chosen in AppNav and applied to <html> (see lib/theme.ts).
  */
 :root {
@@ -137,6 +138,44 @@
   --route: #111111;
   --marker-position: #c8102e;
   --marker-ring: #ffc20e;
+}
+
+/* Contour — a field-guide / topo-map look. Evergreen header etched with
+   contour lines, paper background, lichen-green highlights, a blaze-orange
+   dashed trail for the route, and OpenTopoMap tiles (see TILE_LAYERS). */
+:root[data-theme="topo"] {
+  color-scheme: light;
+  --background: #f1eee0;
+  --surface: #fbfaf3;
+  --foreground: #1b2a1f;
+  --muted: #5a6857;
+  --muted-2: #8f9a86;
+  --border: #dcd8c2;
+  --border-strong: #b8b598;
+  --accent: #2c6a3c;
+  --accent-hover: #235631;
+  --accent-soft: #e0ead2;
+  --accent-contrast: #fbfaf3;
+  --accent-ink: #2c6a3c;
+  --danger: #b5401c;
+  --success: #2c6a3c;
+
+  --nav-bg: #173825;
+  --nav-fg: #f1eee0;
+  --nav-muted: #a7bba3;
+  --nav-border: #24503a;
+  --nav-active-bg: #c8df6a;
+  --nav-active-fg: #173825;
+
+  --radius: 0.625rem;
+  --radius-sm: 0.5rem;
+  --radius-card: 0.875rem;
+
+  --route: #e0561b;
+  --marker-position: #173825;
+  --marker-ring: #c8df6a;
+  --contour-lines: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='120' viewBox='0 0 420 120'%3E%3Cg fill='none' stroke='%23c8df6a' stroke-opacity='0.2' stroke-width='1.2'%3E%3Cpath d='M0 7.5c70 -12.0 140 -12.0 210 0s140 12.0 210 0'/%3E%3Cpath d='M0 22.5c70 -20.7 140 -20.7 210 0s140 20.7 210 0'/%3E%3Cpath d='M0 37.5c70 -16.6 140 -16.6 210 0s140 16.6 210 0'/%3E%3Cpath d='M0 52.5c70 -5.8 140 -5.8 210 0s140 5.8 210 0'/%3E%3Cpath d='M0 67.5c70 -4.0 140 -4.0 210 0s140 4.0 210 0'/%3E%3Cpath d='M0 82.5c70 -13.9 140 -13.9 210 0s140 13.9 210 0'/%3E%3Cpath d='M0 97.5c70 -21.0 140 -21.0 210 0s140 21.0 210 0'/%3E%3Cpath d='M0 112.5c70 -14.9 140 -14.9 210 0s140 14.9 210 0'/%3E%3C/g%3E%3C/svg%3E");
+  --contour-lines-page: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='120' viewBox='0 0 420 120'%3E%3Cg fill='none' stroke='%232c6a3c' stroke-opacity='0.08' stroke-width='1.2'%3E%3Cpath d='M0 7.5c70 -12.0 140 -12.0 210 0s140 12.0 210 0'/%3E%3Cpath d='M0 22.5c70 -20.7 140 -20.7 210 0s140 20.7 210 0'/%3E%3Cpath d='M0 37.5c70 -16.6 140 -16.6 210 0s140 16.6 210 0'/%3E%3Cpath d='M0 52.5c70 -5.8 140 -5.8 210 0s140 5.8 210 0'/%3E%3Cpath d='M0 67.5c70 -4.0 140 -4.0 210 0s140 4.0 210 0'/%3E%3Cpath d='M0 82.5c70 -13.9 140 -13.9 210 0s140 13.9 210 0'/%3E%3Cpath d='M0 97.5c70 -21.0 140 -21.0 210 0s140 21.0 210 0'/%3E%3Cpath d='M0 112.5c70 -14.9 140 -14.9 210 0s140 14.9 210 0'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 @theme inline {
@@ -420,4 +459,53 @@ input[type="range"]::-moz-range-thumb {
   background: #1d1d1d;
   color: #ffffff;
   border-color: #3a3a3a;
+}
+
+:root[data-theme="topo"] body {
+  background-image: var(--contour-lines-page);
+  background-size: 840px 240px;
+}
+:root[data-theme="topo"] .app-nav {
+  background-image: var(--contour-lines);
+  background-size: 420px 120px;
+}
+/* Logo dot becomes a summit: concentric contour rings. */
+:root[data-theme="topo"] .app-nav > a:first-child > span {
+  background: var(--nav-active-bg) !important;
+  box-shadow:
+    0 0 0 2px var(--nav-bg),
+    0 0 0 3px var(--nav-active-bg),
+    0 0 0 5px var(--nav-bg),
+    0 0 0 6px color-mix(in oklab, var(--nav-active-bg) 55%, transparent);
+  margin: 0 6px;
+}
+:root[data-theme="topo"] h1,
+:root[data-theme="topo"] h2 {
+  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+:root[data-theme="topo"] .app-nav > a:first-child {
+  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  font-size: 1.05rem;
+}
+:root[data-theme="topo"] .app-nav .input {
+  background: #1f4630;
+  color: var(--nav-fg);
+  border-color: var(--nav-border);
+}
+/* Trail-style route: dashed blaze orange with a paper-colored halo. */
+:root[data-theme="topo"] .route-line {
+  stroke-dasharray: 10 6;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 1.5px #fbfaf3) drop-shadow(0 0 1px #fbfaf3);
+}
+:root[data-theme="topo"] .map-dot-waypoint {
+  background: var(--surface);
+  border-color: var(--route);
+}
+:root[data-theme="topo"] .map-dot-position {
+  box-shadow:
+    0 0 0 4px color-mix(in oklab, var(--marker-ring) 45%, transparent),
+    0 1px 4px rgba(0, 0, 0, 0.5);
 }

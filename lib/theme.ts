@@ -4,9 +4,27 @@ export const THEMES = [
   { id: "default", label: "Default" },
   { id: "console", label: "Night Ops" },
   { id: "signage", label: "Wayfinding" },
+  { id: "topo", label: "Contour" },
 ] as const;
 
 export type ThemeId = (typeof THEMES)[number]["id"];
+
+const OSM = {
+  url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  attribution: '&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>',
+};
+
+// Base map per theme. Contour swaps to OpenTopoMap for real elevation lines.
+export const TILE_LAYERS: Record<ThemeId, typeof OSM> = {
+  default: OSM,
+  console: OSM,
+  signage: OSM,
+  topo: {
+    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    attribution:
+      '&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>, SRTM | &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
+  },
+};
 
 export function applyTheme(theme: ThemeId) {
   const root = document.documentElement;

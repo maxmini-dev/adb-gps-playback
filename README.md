@@ -53,7 +53,8 @@ into the "serial" box on the Play screen so fixes only go to that emulator.
 Pick a look from the **Theme** menu in the header: **Default** (follows your
 OS light/dark setting), **Night Ops** (dark console with a phosphor-green
 route and darkened map tiles), or **Wayfinding** (transit-signage black and
-yellow with bold outlines). The choice is saved with the rest of your state.
+yellow with bold outlines), or **Contour** (field-guide topo look on
+OpenTopoMap tiles, with a dashed blaze-orange trail). The choice is saved with the rest of your state.
 
 Staged routes, player state, and theme persist across reloads via `localStorage`.
 The raw GTFS feed does not — reload it if you refresh with no staged routes.
