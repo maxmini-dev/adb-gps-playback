@@ -38,31 +38,18 @@ location from there rather than from the platform providers.
 
 ## Usage
 
-1. **Load**: open a GTFS `.zip`. By default it lists only trips departing in a
-   window (a date plus a start time and length; ◀ ▶ changes the date). Trips
-   are included only if their service runs that day, per `calendar.txt` and
-   `calendar_dates.txt`, and after-midnight trips from the previous service day
-   count too. Expand a route and tap **Stage** on a trip; this also reads its
-   timetable. Turn the filter off to list every distinct shape instead.
+1. **Load**: open a GTFS `.zip`, expand a route and tap **Stage** on a shape.
+   Staging also reads that trip's stops from `stop_times.txt`.
 2. **Edit**: pick a staged route to see it on the map.
    - **Drag** a point to move it
    - **Tap** near the line to insert a point into the nearest segment
    - **Long-press** a point to delete it (a route always keeps at least 2)
    - **Reset** restores the original GTFS geometry
-3. **Play**: pick the route and a mode, then tap **Play**.
-   - **Follow schedule** (trips staged with a timetable): the vehicle is where
-     the timetable says it should be *right now*, in the agency's timezone, and
-     it stops at every stop. The **ahead/behind** slider (−10 to +30 min, live)
-     shifts it early or late, and the panel shows the next stop and its time.
-     **Pause** holds the vehicle in place, so it resumes later than scheduled.
-     Dragging the position slider sets the delay implied by the new position.
-   - **Fixed speed**: base m/s × multiplier, optionally stopping at each stop.
-
-   In both modes, **Minimum stop time** (default 20 s) sets a floor on dwell
-   time. Many feeds list arrival = departure, so without it the vehicle
-   wouldn't stop at all. In schedule mode, the vehicle arrives earlier rather
-   than departing late, because rider apps compare against departures. There's
-   also optional GPS jitter. The map shows the position with a heading arrow
+3. **Play**: pick the route, set the speed (m/s × multiplier) and optional
+   jitter, then tap **Play**. With **Stop at each stop** on (the default), the
+   vehicle waits at every stop along the trip for the set time (default 20 s,
+   scaled by the multiplier) and reports speed 0 while it waits. Stops show as
+   dots on the map and follow your route edits. The map shows the position with a heading arrow
    and follows it while *Keep map centered* is on. Scrub with the position
    slider. **Stop mocking** removes the test providers so the device goes back
    to real GPS.
@@ -82,7 +69,6 @@ flowchart LR
   subgraph core [":core (pure Kotlin)"]
     Parser["GtfsParser<br/>streaming zip + CSV"]
     Engine["PlaybackEngine<br/>advance · dwell · bearing · jitter"]
-    Sched["schedule<br/>timeline · service clock · window filter"]
     Geo["geo<br/>haversine · interpolation · GeoJSON"]
     Edits["edit<br/>RouteEdit · hit testing"]
   end
@@ -109,9 +95,7 @@ flowchart LR
   Tiles[["OSM raster tiles"]] --> Map
   UI -->|play / pause / stop intents| Svc
   Notif -->|intents| Svc
-  Svc -->|advance + service time| Engine
-  Engine --> Sched
-  Parser -->|trip spans · calendar| Sched
+  Svc -->|advance| Engine
   Engine --> Geo
   Svc <-->|player state| Store
   Svc -->|Fix| Sink
@@ -128,12 +112,8 @@ flowchart LR
 | `core/.../geo/GeoJson.kt` | GeoJSON strings for the map's route, waypoint and position layers |
 | `core/.../edit/RouteEdits.kt` | `RouteEdit` (move / insert / delete / reset) and `applyEdit`, mirroring the web store's actions |
 | `core/.../edit/HitTest.kt` | Screen-space vertex and segment hit testing for the editor |
-| `core/.../playback/PlaybackEngine.kt` | Pure playback step (fixed speed with dwell, or schedule-driven) plus fix generation (bearing, speed, accuracy, Gauss–Markov jitter) |
-| `core/.../schedule/ScheduleTimeline.kt` | Trip motion over schedule time: phases, distance / speed at time, minimum-dwell handling |
-| `core/.../schedule/StopProjection.kt` | Place stops along the (possibly edited) route, monotonically so loops don't mis-snap |
-| `core/.../schedule/ServiceClock.kt` | Wall clock → service-day seconds (handles after-midnight trips); offset that holds a position |
-| `core/.../schedule/TripFilter.kt` | Trips departing in a date + time window |
-| `core/.../gtfs/ServiceCalendar.kt` | `calendar.txt` + `calendar_dates.txt` |
+| `core/.../playback/PlaybackEngine.kt` | Pure playback step (speed, dwell at stops) plus fix generation (bearing, speed, accuracy, Gauss–Markov jitter) |
+| `core/.../geo/StopProjection.kt` | Place stops along the (possibly edited) route, monotonically so loops don't mis-snap |
 | `app/.../AppStore.kt` | App state and JSON persistence (routes, player, settings) |
 | `app/.../mock/MockLocationSink.kt` | Test-provider lifecycle and `Location` construction |
 | `app/.../playback/PlaybackService.kt` | Foreground service, tick loop, notification |

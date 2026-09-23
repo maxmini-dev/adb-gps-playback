@@ -39,7 +39,7 @@ class GtfsParserTest {
         )
         val data = GtfsParser.parse({ opens++; ByteArrayInputStream(bytes) }, now = 42)
         assertEquals(listOf(LatLon(3.0, 4.0), LatLon(5.0, 6.0)), data.shapes["SH1"]!!.points)
-        assertEquals(2, opens) // pass 1 + the stop_times pass
+        assertEquals(1, opens) // no fallback needed → stop_times never read
         val route = data.editableRouteFor("T1")!!
         assertEquals("10 — North", route.label)
         assertEquals(42L, data.loadedAt)

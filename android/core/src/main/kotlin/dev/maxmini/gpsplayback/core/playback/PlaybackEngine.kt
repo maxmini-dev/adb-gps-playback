@@ -4,13 +4,11 @@ import dev.maxmini.gpsplayback.core.geo.bearingAtDistance
 import dev.maxmini.gpsplayback.core.geo.cumulativeDistances
 import dev.maxmini.gpsplayback.core.geo.offsetMeters
 import dev.maxmini.gpsplayback.core.geo.pointAtDistance
+import dev.maxmini.gpsplayback.core.geo.projectStopsOntoRoute
 import dev.maxmini.gpsplayback.core.model.JitterSettings
 import dev.maxmini.gpsplayback.core.model.LatLon
-import dev.maxmini.gpsplayback.core.model.PlaybackMode
 import dev.maxmini.gpsplayback.core.model.PlayerState
-import dev.maxmini.gpsplayback.core.model.ScheduledStop
-import dev.maxmini.gpsplayback.core.schedule.ScheduleTimeline
-import dev.maxmini.gpsplayback.core.schedule.projectStopsOntoRoute
+import dev.maxmini.gpsplayback.core.model.RouteStop
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.sqrt
@@ -27,18 +25,16 @@ data class Fix(
 
 /**
  * Pure playback logic, with no Android or clock dependencies so it can be unit
- * tested. The service owns the clock: it calls [advance] once per tick with the
- * real elapsed time (and, in schedule mode, the current service-day second).
+ * tested. The service owns the clock and calls [advance] once per tick with the
+ * real elapsed time, so an irregular tick rate never changes playback speed.
  *
- * Two modes (see [PlaybackMode]):
- * - fixed speed: move at base speed × multiplier, optionally dwelling
- *   `minDwellSec` at each stop (dwell time is also scaled by the multiplier);
- * - schedule: position is a pure function of (now − offset) on the trip's
- *   [ScheduleTimeline], including dwells.
+ * Moves at base speed × multiplier and, when `stopAtStops` is on, waits
+ * `dwellSec` at each intermediate stop. Dwell time is scaled by the multiplier
+ * too, so 10× fast-forwards the whole trip.
  */
 class PlaybackEngine(
     private val waypoints: List<LatLon>,
-    stops: List<ScheduledStop> = emptyList(),
+    stops: List<RouteStop> = emptyList(),
     private val random: Random = Random.Default,
 ) {
     private val cum = cumulativeDistances(waypoints)
@@ -46,26 +42,11 @@ class PlaybackEngine(
 
     /** Meters along the route of each stop (follows edited geometry). */
     val stopDistances: DoubleArray = projectStopsOntoRoute(waypoints, cum, stops.map { it.point })
-    private val stopArrivals = stops.map { it.arrivalSec }
-    private val stopDepartures = stops.map { it.departureSec }
 
-    private var timelineDwell: Int? = null
-    private var cachedTimeline: ScheduleTimeline? = null
-
-    /** The timetable as motion over time, or null if the route has no usable schedule. */
-    fun timeline(minDwellSec: Int): ScheduleTimeline? {
-        if (stopDistances.size < 2) return null
-        if (timelineDwell != minDwellSec) {
-            cachedTimeline = ScheduleTimeline(stopDistances, stopArrivals, stopDepartures, minDwellSec)
-            timelineDwell = minDwellSec
-        }
-        return cachedTimeline
-    }
-
-    // Speed reported with the next fix; null = the nominal fixed speed.
+    // Speed reported with the next fix; null = the nominal speed.
     private var speedOverride: Double? = null
 
-    // Fixed-speed dwell tracking (transient, not persisted).
+    // Dwell tracking (transient, not persisted).
     private var dwellRemaining = 0.0
     private var dwelledStop = -1
     private var lastOut: Double? = null
@@ -75,42 +56,19 @@ class PlaybackEngine(
     private var errNorth = 0.0
     private var errEast = 0.0
 
-    /** True while the vehicle is stopped at a stop (fixed-speed dwell or scheduled dwell). */
+    /** True while the vehicle is waiting at a stop. */
     var dwelling: Boolean = false
         private set
 
-    /**
-     * Advance [state] by [dtSeconds]. In schedule mode [serviceNowSec] (seconds
-     * after service-day midnight, see `serviceSecondsAt`) is required; without it
-     * or without a schedule, the engine falls back to fixed speed.
-     */
-    fun advance(state: PlayerState, dtSeconds: Double, serviceNowSec: Double? = null): PlayerState {
+    /** Advance [state] by [dtSeconds]. Stops playing when the end is reached. */
+    fun advance(state: PlayerState, dtSeconds: Double): PlayerState {
         if (!state.playing) {
             speedOverride = 0.0
             dwelling = false
             return state
         }
-        val tl = if (state.mode == PlaybackMode.SCHEDULE && serviceNowSec != null) timeline(state.minDwellSec) else null
-        return if (tl != null) advanceSchedule(state, tl, serviceNowSec!!) else advanceFixed(state, dtSeconds)
-    }
-
-    private fun advanceSchedule(state: PlayerState, tl: ScheduleTimeline, serviceNowSec: Double): PlayerState {
-        val s = serviceNowSec - state.scheduleOffsetSec
-        val phase = tl.phaseAt(s)
-        speedOverride = tl.speedAt(s)
-        dwelling = phase is ScheduleTimeline.Phase.AtStop || phase is ScheduleTimeline.Phase.BeforeStart
-        val progress = tl.distanceAt(s)
-        lastOut = progress
-        return if (phase is ScheduleTimeline.Phase.Finished) {
-            state.copy(progressMeters = progress, playing = false)
-        } else {
-            state.copy(progressMeters = progress)
-        }
-    }
-
-    private fun advanceFixed(state: PlayerState, dtSeconds: Double): PlayerState {
         val base = state.baseSpeedMps
-        val useStops = state.stopAtStops && stopDistances.isNotEmpty() && state.minDwellSec > 0
+        val useStops = state.stopAtStops && stopDistances.isNotEmpty() && state.dwellSec > 0
         var p = state.progressMeters
         val last = lastOut
         if (last == null || abs(p - last) > 1e-6) {
@@ -135,7 +93,7 @@ class PlaybackEngine(
                 p = target
                 if (nextStop < stopDistances.size) {
                     dwelledStop = nextStop
-                    if (target < totalMeters) dwellRemaining = state.minDwellSec.toDouble()
+                    if (target < totalMeters) dwellRemaining = state.dwellSec.toDouble()
                 } else {
                     break
                 }

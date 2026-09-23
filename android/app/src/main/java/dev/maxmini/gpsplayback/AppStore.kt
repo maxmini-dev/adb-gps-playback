@@ -91,9 +91,9 @@ object AppStore {
     }
 
     /**
-     * Stage a trip, reading its timetable from the feed (a streaming pass over
+     * Stage a trip, reading its stop list from the feed (a streaming pass over
      * stop_times.txt, so this runs on the IO dispatcher). Returns a message if
-     * something went wrong or the trip was staged without a timetable.
+     * something went wrong or the trip was staged without stops.
      */
     suspend fun stageTrip(tripId: String): String? {
         val data = _gtfs.value ?: return "No feed loaded."
@@ -105,14 +105,14 @@ object AppStore {
             try {
                 withContext(Dispatchers.IO) { GtfsParser.readTripStops(source, tripId, data.stops) }
             } catch (e: Exception) {
-                warning = "Couldn't read the timetable (${e.message}); staged without it."
+                warning = "Couldn't read the trip's stops (${e.message}); staged without them."
                 emptyList()
             }
         }
         val route = data.editableRouteFor(tripId, stops) ?: return "This trip has no shape to follow."
         _routes.update { it + (route.id to route) }
         save()
-        return warning ?: if (stops.size < 2) "Staged without a timetable: schedule mode won't be available." else null
+        return warning ?: if (stops.isEmpty()) "Staged without stops: the vehicle won't stop along the way." else null
     }
 
     /** Apply a waypoint edit (move / insert / delete / reset) to a staged route. */

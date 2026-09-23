@@ -1,6 +1,5 @@
-package dev.maxmini.gpsplayback.core.schedule
+package dev.maxmini.gpsplayback.core.geo
 
-import dev.maxmini.gpsplayback.core.geo.EARTH_RADIUS_M
 import dev.maxmini.gpsplayback.core.model.LatLon
 import kotlin.math.cos
 import kotlin.math.sqrt

@@ -10,7 +10,7 @@ independent apps:
 | Mechanism | `adb emu geo fix` | `LocationManager` test providers (+ Play Services mock mode) |
 | Keeps playing in background | n/a (browser tab drives it) | Yes, foreground service with notification controls |
 | Route editor | Leaflet: drag, click to insert, right-click to delete | MapLibre: drag, tap line to insert, long-press to delete |
-| Schedule | — | Filter trips by date + departure time; follow the timetable in real time, stopping at stops, running early or late by a live offset |
+| Stops | — | Waits a set time at each of the trip's stops (toggle) |
 | Extras | — | Bearing/speed/accuracy, GPS jitter |
 
 Both load a GTFS `.zip`, let you stage trips (building polylines from stops when
