@@ -18,14 +18,15 @@ L.Icon.Default.mergeOptions({
 
 export const waypointIcon = L.divIcon({
   className: "gps-waypoint",
-  html: '<div style="width:14px;height:14px;border-radius:50%;background:#3b82f6;border:2px solid white;box-shadow:0 0 2px rgba(0,0,0,0.6);"></div>',
+  // Colors come from --route / --marker-* tokens in globals.css.
+  html: '<div class="map-dot map-dot-waypoint"></div>',
   iconSize: [14, 14],
   iconAnchor: [7, 7],
 });
 
 export const positionIcon = L.divIcon({
   className: "gps-position",
-  html: '<div style="width:18px;height:18px;border-radius:50%;background:#ef4444;border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.6);"></div>',
+  html: '<div class="map-dot map-dot-position"></div>',
   iconSize: [18, 18],
   iconAnchor: [9, 9],
 });

@@ -104,7 +104,7 @@ export default function EditPage() {
               <div
                 className="text-sm font-medium truncate"
                 style={{
-                  color: active ? "var(--accent)" : "var(--foreground)",
+                  color: active ? "var(--accent-ink)" : "var(--foreground)",
                 }}
               >
                 {r.label}

@@ -11,7 +11,7 @@ export default function Home() {
           <p className="text-[color:var(--muted)] mt-2">
             Load a GTFS feed, edit route polylines, and stream simulated GPS
             fixes to a running Android emulator via{" "}
-            <code className="font-mono text-sm px-1 py-0.5 rounded bg-[color:var(--accent-soft)] text-[color:var(--accent)]">
+            <code className="font-mono text-sm px-1 py-0.5 rounded bg-[color:var(--accent-soft)] text-[color:var(--accent-ink)]">
               adb emu geo fix
             </code>
             .
@@ -81,7 +81,7 @@ function Step({
           className="text-xl font-semibold w-8 h-8 shrink-0 flex items-center justify-center rounded-full"
           style={{
             background: "var(--accent-soft)",
-            color: "var(--accent)",
+            color: "var(--accent-ink)",
           }}
         >
           {step}

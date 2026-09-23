@@ -87,7 +87,7 @@ export default function LoadPage() {
               className="w-10 h-10 rounded-full flex items-center justify-center"
               style={{
                 background: "var(--accent-soft)",
-                color: "var(--accent)",
+                color: "var(--accent-ink)",
               }}
             >
               <svg
@@ -110,7 +110,7 @@ export default function LoadPage() {
               Files stay in your browser — nothing is uploaded.
             </div>
             {loading && (
-              <div className="text-sm text-[color:var(--accent)] mt-1">
+              <div className="text-sm text-[color:var(--accent-ink)] mt-1">
                 Parsing…
               </div>
             )}
@@ -171,7 +171,7 @@ export default function LoadPage() {
                       >
                         <polyline points="9 18 15 12 9 6" />
                       </svg>
-                      <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-[color:var(--accent-soft)] text-[color:var(--accent)]">
+                      <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-[color:var(--accent-soft)] text-[color:var(--accent-ink)]">
                         {r.route_short_name ?? r.route_id}
                       </span>
                       <span className="truncate">

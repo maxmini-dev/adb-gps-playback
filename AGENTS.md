@@ -31,7 +31,10 @@ GTFS zip → lib/gtfs.ts (parse) → Zustand store → EditorMap / PlayerMap
   every other GPS API. Do not "fix" this.
 - **Keep dependencies minimal.** No shadcn, no icon libraries, no UI kits.
   Shared styles live in `app/globals.css` as plain `.btn` / `.input` / `.card`
-  / `.badge` classes plus CSS custom-property design tokens.
+  / `.badge` classes plus CSS custom-property design tokens. Themes
+  (`lib/theme.ts`) only override those tokens under `:root[data-theme=…]`,
+  so use tokens (`--accent-ink` for accent-colored text, `--route` /
+  `--marker-*` for map colors) instead of hard-coded colors.
 - **No tests exist yet.** If you add logic to `lib/geo.ts` or `lib/gtfs.ts`,
   consider a lightweight test; do not scaffold a test framework without asking.
 - **GTFS shapes are optional.** If `shapes.txt` is missing/empty or a trip has

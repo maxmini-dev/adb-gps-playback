@@ -8,11 +8,13 @@ import type {
   LatLon,
   PlayerState,
 } from "./types";
+import type { ThemeId } from "./theme";
 
 type State = {
   gtfs: GtfsData | null;
   routes: Record<string, EditableRoute>;
   player: PlayerState;
+  theme: ThemeId;
 };
 
 type Actions = {
@@ -24,6 +26,7 @@ type Actions = {
   deleteWaypoint: (id: string, index: number) => void;
   resetRoute: (id: string) => void;
   setPlayer: (patch: Partial<PlayerState>) => void;
+  setTheme: (theme: ThemeId) => void;
 };
 
 const initialPlayer: PlayerState = {
@@ -41,6 +44,7 @@ export const useStore = create<State & Actions>()(
       gtfs: null,
       routes: {},
       player: initialPlayer,
+      theme: "default",
 
       setGtfs: (data) => set({ gtfs: data }),
 
@@ -120,11 +124,17 @@ export const useStore = create<State & Actions>()(
         }),
 
       setPlayer: (patch) => set((s) => ({ player: { ...s.player, ...patch } })),
+
+      setTheme: (theme) => set({ theme }),
     }),
     {
       name: "gps-playback",
-      // Persist routes and player but not the (potentially large) raw GTFS.
-      partialize: (s) => ({ routes: s.routes, player: s.player }),
+      // Persist routes, player and theme but not the (potentially large) raw GTFS.
+      partialize: (s) => ({
+        routes: s.routes,
+        player: s.player,
+        theme: s.theme,
+      }),
     },
   ),
 );

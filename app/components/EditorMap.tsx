@@ -95,7 +95,11 @@ export default function EditorMap({ routeId }: { routeId: string }) {
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <FitBoundsOnce points={waypoints} />
-      <Polyline positions={positions} pathOptions={{ color: "#3b82f6", weight: 4 }} />
+      <Polyline
+        positions={positions}
+        className="route-line"
+        pathOptions={{ weight: 4 }}
+      />
       <PolylineClickInsert routeId={routeId} />
       {waypoints.map((p, i) => (
         <Marker

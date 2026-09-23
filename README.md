@@ -50,7 +50,12 @@ into the "serial" box on the Play screen so fixes only go to that emulator.
    and a multiplier (0.5×–20×). The app POSTs the current interpolated
    position to `/api/adb` ~4×/sec, which shells out to `adb emu geo fix`.
 
-Staged routes and player state persist across reloads via `localStorage`.
+Pick a look from the **Theme** menu in the header: **Default** (follows your
+OS light/dark setting), **Night Ops** (dark console with a phosphor-green
+route and darkened map tiles), or **Wayfinding** (transit-signage black and
+yellow with bold outlines). The choice is saved with the rest of your state.
+
+Staged routes, player state, and theme persist across reloads via `localStorage`.
 The raw GTFS feed does not — reload it if you refresh with no staged routes.
 
 ## Architecture
@@ -65,7 +70,7 @@ flowchart LR
     Edit["/edit view<br/>EditorMap"]
     Play["/play view<br/>PlayerMap"]
     Loop{{"Playback loop<br/>requestAnimationFrame"}}
-    Store[("Zustand store<br/>routes + player<br/>localStorage")]
+    Store[("Zustand store<br/>routes + player + theme<br/>localStorage")]
   end
 
   subgraph Server ["Next.js server"]
@@ -94,7 +99,8 @@ Key modules:
 | --- | --- |
 | `lib/gtfs.ts` | Parse GTFS zip; synthesize per-trip shapes from stops when missing |
 | `lib/geo.ts` | Haversine, cumulative distances, `pointAtDistance` interpolation |
-| `lib/store.ts` | Zustand store; persists `routes` + `player` (not raw GTFS) |
+| `lib/store.ts` | Zustand store; persists `routes` + `player` + `theme` (not raw GTFS) |
+| `lib/theme.ts` | Theme list, `data-theme` switching, pre-paint init script |
 | `app/api/adb/route.ts` | Shells out to `adb emu geo fix <lon> <lat>` (resolves `ADB_PATH` or PATH) |
 | `app/components/EditorMap.tsx` | Leaflet map with draggable / click-to-insert / right-click-to-delete waypoints |
 | `app/components/PlayerMap.tsx` | Read-only map with route + moving position marker, optional auto-pan |

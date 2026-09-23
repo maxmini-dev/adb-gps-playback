@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens. Three themes share these names:
+ *   default          — neutral slate/blue, follows OS light/dark
+ *   [data-theme=console]  "Night Ops"  — dark ops console, phosphor green, mono
+ *   [data-theme=signage]  "Wayfinding" — transit signage, black/yellow, bold
+ * The theme is chosen in AppNav and applied to <html> (see lib/theme.ts).
+ */
 :root {
   --background: #fafafa;
   --surface: #ffffff;
@@ -11,8 +18,33 @@
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
   --accent-soft: #dbeafe;
+  /* Text on an --accent background, and accent-colored text on --surface. */
+  --accent-contrast: #ffffff;
+  --accent-ink: var(--accent);
   --danger: #dc2626;
   --success: #16a34a;
+
+  --nav-bg: var(--surface);
+  --nav-fg: var(--foreground);
+  --nav-muted: var(--muted);
+  --nav-border: var(--border);
+  --nav-active-bg: var(--accent-soft);
+  --nav-active-fg: var(--accent-ink);
+
+  --font-body: var(--font-geist-sans);
+  --radius: 0.5rem;
+  --radius-sm: 0.375rem;
+  --radius-card: 0.75rem;
+  --border-width: 1px;
+  --control-case: none;
+  --control-tracking: normal;
+  --control-weight: 500;
+
+  /* Map */
+  --route: #3b82f6;
+  --marker-position: #ef4444;
+  --marker-ring: #ffffff;
+  --map-tiles-filter: none;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -32,6 +64,81 @@
   }
 }
 
+/* Night Ops — a dispatch-console look for long sessions next to an emulator.
+   Near-black surfaces, phosphor-green accent, amber live position, mono
+   type, hairline square corners, and darkened map tiles. */
+:root[data-theme="console"] {
+  color-scheme: dark;
+  --background: #06090a;
+  --surface: #0c1112;
+  --foreground: #d5e3dc;
+  --muted: #7f928a;
+  --muted-2: #56655f;
+  --border: #1a2427;
+  --border-strong: #2a393c;
+  --accent: #36e08a;
+  --accent-hover: #6cf0ad;
+  --accent-soft: #0f2d20;
+  --accent-contrast: #03140b;
+  --accent-ink: #36e08a;
+  --danger: #ff6b6b;
+  --success: #36e08a;
+
+  --nav-bg: #080c0d;
+  --nav-active-bg: transparent;
+
+  --font-body: var(--font-geist-mono);
+  --radius: 2px;
+  --radius-sm: 2px;
+  --radius-card: 3px;
+  --control-case: uppercase;
+  --control-tracking: 0.06em;
+
+  --route: #36e08a;
+  --marker-position: #ffb020;
+  --marker-ring: #06090a;
+  --map-tiles-filter: invert(1) hue-rotate(180deg) brightness(0.8)
+    contrast(0.9) saturate(0.35);
+}
+
+/* Wayfinding — borrowed from transit signage. Warm paper background, a
+   black header bar, signage-yellow accent with black text, thick borders
+   and pill-shaped controls. Readable on a bright monitor or projector. */
+:root[data-theme="signage"] {
+  color-scheme: light;
+  --background: #f3efe6;
+  --surface: #ffffff;
+  --foreground: #111111;
+  --muted: #55524c;
+  --muted-2: #8c877d;
+  --border: #d8d1c2;
+  --border-strong: #111111;
+  --accent: #ffc20e;
+  --accent-hover: #ffd23f;
+  --accent-soft: #fff1c2;
+  --accent-contrast: #111111;
+  --accent-ink: #8a5a00;
+  --danger: #c8102e;
+  --success: #00843d;
+
+  --nav-bg: #111111;
+  --nav-fg: #ffffff;
+  --nav-muted: #b8b3a8;
+  --nav-border: #2e2e2e;
+  --nav-active-bg: var(--accent);
+  --nav-active-fg: #111111;
+
+  --radius: 999px;
+  --radius-sm: 999px;
+  --radius-card: 1rem;
+  --border-width: 2px;
+  --control-weight: 600;
+
+  --route: #111111;
+  --marker-position: #c8102e;
+  --marker-ring: #ffc20e;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
@@ -45,7 +152,7 @@
   --color-accent-soft: var(--accent-soft);
   --color-danger: var(--danger);
   --color-success: var(--success);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-body);
   --font-mono: var(--font-geist-mono);
 }
 
@@ -57,7 +164,7 @@ body {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+  font-family: var(--font-body), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -71,12 +178,14 @@ body {
   justify-content: center;
   gap: 0.375rem;
   padding: 0.5rem 0.875rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  border: var(--border-width) solid var(--border-strong);
   background: var(--surface);
   color: var(--foreground);
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: var(--control-weight);
+  text-transform: var(--control-case);
+  letter-spacing: var(--control-tracking);
   line-height: 1;
   cursor: pointer;
   transition:
@@ -105,7 +214,7 @@ body {
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: white;
+  color: var(--accent-contrast);
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
@@ -132,13 +241,13 @@ body {
 .btn-sm {
   padding: 0.3125rem 0.625rem;
   font-size: 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-sm);
 }
 
 .input {
   padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  border: var(--border-width) solid var(--border-strong);
   background: var(--surface);
   color: var(--foreground);
   font-size: 0.875rem;
@@ -157,8 +266,8 @@ body {
 
 .card {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-card);
 }
 
 .badge {
@@ -168,13 +277,15 @@ body {
   padding: 0.1875rem 0.5rem;
   border-radius: 999px;
   font-size: 0.6875rem;
-  font-weight: 500;
+  font-weight: var(--control-weight);
+  text-transform: var(--control-case);
+  letter-spacing: var(--control-tracking);
   background: color-mix(in oklab, var(--surface) 60%, var(--foreground) 6%);
   color: var(--muted);
 }
 .badge-accent {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .badge-success {
   background: color-mix(in oklab, var(--success) 20%, transparent);
@@ -216,7 +327,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .link {
-  color: var(--accent);
+  color: var(--accent-ink);
   text-decoration: none;
 }
 .link:hover {
@@ -232,4 +343,81 @@ input[type="range"]::-moz-range-thumb {
   background: var(--surface);
   color: var(--foreground);
   box-shadow: 0 1px 0 var(--border-strong);
+}
+
+/* --- map (Leaflet) --- */
+
+/* Overrides Leaflet's stroke attribute; see pathOptions.className. */
+.route-line {
+  stroke: var(--route);
+}
+
+.map-dot {
+  border-radius: 50%;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
+}
+.map-dot-waypoint {
+  width: 14px;
+  height: 14px;
+  background: var(--route);
+  border: 2px solid var(--marker-ring);
+}
+.map-dot-position {
+  width: 18px;
+  height: 18px;
+  background: var(--marker-position);
+  border: 3px solid var(--marker-ring);
+}
+
+.leaflet-tile-pane {
+  filter: var(--map-tiles-filter);
+}
+.leaflet-container {
+  background: var(--background);
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+}
+/* Scoped under .leaflet-container to beat leaflet.css, which loads later. */
+.leaflet-container .leaflet-bar a,
+.leaflet-container .leaflet-bar a:hover {
+  background: var(--surface);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+.leaflet-container .leaflet-control-attribution.leaflet-control {
+  background: color-mix(in oklab, var(--surface) 85%, transparent);
+  color: var(--muted);
+}
+.leaflet-container .leaflet-control-attribution a {
+  color: var(--accent-ink);
+}
+
+/* --- theme-specific flourishes beyond tokens --- */
+
+:root[data-theme="console"] .card {
+  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--accent) 12%, transparent);
+}
+:root[data-theme="console"] .app-nav {
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--accent) 25%, transparent);
+}
+:root[data-theme="console"] .map-dot-position {
+  box-shadow:
+    0 0 0 4px color-mix(in oklab, var(--marker-position) 30%, transparent),
+    0 0 14px var(--marker-position);
+}
+:root[data-theme="console"] .route-line {
+  filter: drop-shadow(0 0 3px color-mix(in oklab, var(--route) 70%, transparent));
+}
+
+:root[data-theme="signage"] h1,
+:root[data-theme="signage"] h2 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+:root[data-theme="signage"] .btn-primary {
+  border-color: var(--foreground);
+}
+:root[data-theme="signage"] .app-nav .input {
+  background: #1d1d1d;
+  color: #ffffff;
+  border-color: #3a3a3a;
 }

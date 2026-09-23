@@ -69,7 +69,11 @@ export default function PlayerMap({
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <FitBoundsOnce points={waypoints} />
-      <Polyline positions={positions} pathOptions={{ color: "#3b82f6", weight: 4 }} />
+      <Polyline
+        positions={positions}
+        className="route-line"
+        pathOptions={{ weight: 4 }}
+      />
       {position && (
         <>
           <Marker position={[position.lat, position.lon]} icon={positionIcon} />
