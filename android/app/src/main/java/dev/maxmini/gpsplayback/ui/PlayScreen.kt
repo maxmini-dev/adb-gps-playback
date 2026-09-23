@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -60,7 +61,10 @@ fun PlayScreen(onNeedRoute: () -> Unit) {
     val position = pointAtDistance(route.waypoints, cum, player.progressMeters)
     val bearing = bearingAtDistance(route.waypoints, cum, player.progressMeters)
     val stopPoints = remember(route.stops) { route.stops.map { it.point } }
-    val hasStops = route.stops.isNotEmpty()
+    val stopDistances = remember(route.waypoints, route.stops) {
+        PlaybackEngine(route.waypoints, route.stops).stopDistances
+    }
+    val hasStops = stopDistances.isNotEmpty()
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)) {
@@ -96,6 +100,8 @@ fun PlayScreen(onNeedRoute: () -> Unit) {
             }
             StatusLine(status.serviceRunning, status.lastError, status.lastSentAt)
 
+            AlongRoute(player.progressMeters, total, stopDistances)
+
             SpeedPanel(player, hasStops)
             JitterPanel(player)
 
@@ -104,17 +110,48 @@ fun PlayScreen(onNeedRoute: () -> Unit) {
                     Text("Keep map centered on position", Modifier.weight(1f))
                     Switch(checked = player.autoPan, onCheckedChange = { v -> AppStore.setPlayer { it.copy(autoPan = v) } })
                 }
-                Muted(
-                    "%.6f, %.6f · %.2f / %.2f km · %d pts".format(
-                        position.lat, position.lon, player.progressMeters / 1000, total / 1000, route.waypoints.size,
-                    ),
-                )
-                Slider(
-                    value = player.progressMeters.toFloat().coerceAtMost(total.toFloat()),
-                    onValueChange = { v -> AppStore.setPlayer(persist = false) { it.copy(progressMeters = v.toDouble()) } },
-                    onValueChangeFinished = { AppStore.save() },
-                    valueRange = 0f..maxOf(total.toFloat(), 1f),
-                )
+                Muted("%.6f, %.6f · %d pts".format(position.lat, position.lon, route.waypoints.size))
+            }
+        }
+    }
+}
+
+/**
+ * Jump anywhere along the route: percentage slider, quick presets, and
+ * previous/next stop. Works while playing too; the service picks up the new
+ * position on its next tick.
+ */
+@Composable
+private fun AlongRoute(progressMeters: Double, total: Double, stopDistances: DoubleArray) {
+    fun seek(meters: Double, persist: Boolean = true) =
+        AppStore.setPlayer(persist) { it.copy(progressMeters = meters.coerceIn(0.0, total)) }
+    val fraction = if (total > 0) (progressMeters / total).coerceIn(0.0, 1.0) else 0.0
+
+    Section("Along route") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("%.1f%%".format(fraction * 100), style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "  %.2f / %.2f km".format(progressMeters / 1000, total / 1000),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Slider(
+            value = fraction.toFloat(),
+            onValueChange = { f -> seek(f * total, persist = false) },
+            onValueChangeFinished = { AppStore.save() },
+            valueRange = 0f..1f,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf(0, 25, 50, 75, 100).forEach { pct ->
+                TextButton(onClick = { seek(total * pct / 100) }) { Text("$pct%") }
+            }
+        }
+        if (stopDistances.isNotEmpty()) {
+            val prev = PlaybackEngine.previousStopBefore(stopDistances, progressMeters)
+            val next = PlaybackEngine.nextStopAfter(stopDistances, progressMeters)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled = prev != null, onClick = { prev?.let { seek(it) } }) { Text("◀ Prev stop") }
+                OutlinedButton(enabled = next != null, onClick = { next?.let { seek(it) } }) { Text("Next stop ▶") }
             }
         }
     }

@@ -155,5 +155,16 @@ class PlaybackEngine(
         private const val STOP_EPS_M = 0.5
 
         fun effectiveSpeed(state: PlayerState) = state.baseSpeedMps * state.speedMultiplier
+
+        /** Distance of the first stop strictly ahead of [meters] (beyond a small tolerance), or null. */
+        fun nextStopAfter(stopDistances: DoubleArray, meters: Double): Double? =
+            stopDistances.firstOrNull { it > meters + JUMP_EPS_M }
+
+        /** Distance of the last stop strictly behind [meters] (beyond a small tolerance), or null. */
+        fun previousStopBefore(stopDistances: DoubleArray, meters: Double): Double? =
+            stopDistances.lastOrNull { it < meters - JUMP_EPS_M }
+
+        // Wider than STOP_EPS_M so repeated taps step stop to stop instead of sticking.
+        private const val JUMP_EPS_M = 1.0
     }
 }

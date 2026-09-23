@@ -54,3 +54,17 @@ class StopsTest {
         assertEquals(stops, data.editableRouteFor("T1", stops)!!.stops)
     }
 }
+
+class StopJumpTest {
+    private val d = doubleArrayOf(0.0, 300.0, 300.5, 900.0)
+
+    @org.junit.Test fun nextAndPrevious() {
+        val e = dev.maxmini.gpsplayback.core.playback.PlaybackEngine
+        assertEquals(300.0, e.nextStopAfter(d, 0.0)!!, 0.0)
+        assertEquals(900.0, e.nextStopAfter(d, 300.0)!!, 0.0) // skips a near-duplicate stop
+        org.junit.Assert.assertNull(e.nextStopAfter(d, 900.0))
+        assertEquals(300.5, e.previousStopBefore(d, 900.0)!!, 0.0)
+        assertEquals(0.0, e.previousStopBefore(d, 300.0)!!, 0.0)
+        org.junit.Assert.assertNull(e.previousStopBefore(d, 0.0))
+    }
+}
