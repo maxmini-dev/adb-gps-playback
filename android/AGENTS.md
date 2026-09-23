@@ -39,6 +39,16 @@ through adb. Sideload-only personal tool, so there is no Play Store policy work.
 - **Advance by real elapsed time** (`SystemClock.elapsedRealtime` deltas), not
   by assuming the tick interval. The default tick is 250 ms, matching the web
   app's ~4 Hz throttle.
+- **Schedule mode is a pure function of time.** Position = timeline at
+  (service-day seconds now − `scheduleOffsetSec`). Don't accumulate schedule
+  progress tick by tick. Pause and scrub work by changing the offset
+  (`offsetToHoldPositionNow`), not by freezing the clock.
+- **Minimum dwell keeps scheduled departures** and pulls arrivals earlier.
+  Rider-facing apps compare against departures, so don't change that without
+  asking.
+- **Service-day times can exceed 24:00.** Always go through `serviceSecondsAt`
+  / `scheduleNow` and the agency timezone (`EditableRoute.timezone`), never raw
+  wall-clock seconds.
 - **GTFS shapes are optional.** Keep the stop-based fallback in
   `GtfsParser` (it mirrors `web/lib/gtfs.ts`). Stream `stop_times.txt` and only
   read it when some trip needs the fallback, because it can be hundreds of MB.

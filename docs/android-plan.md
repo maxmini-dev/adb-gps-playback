@@ -52,6 +52,7 @@ Permissions: `ACCESS_FINE_LOCATION` (the location FGS type requires it on API
 | 4 | Play screen: controls + MapLibre map with route, heading-arrow position marker, auto-pan | 🟡 Code written. The map controller type-checks against the real Android + MapLibre classes; not yet run |
 | 5 | Editor screen: drag waypoint, tap near the line to insert, long-press to delete, reset | 🟡 Code written. Edit ops and hit testing are unit tested (24 `:core` tests total); gestures not yet tried on a device |
 | 6 | Polish: battery-optimization exemption prompt, tick-rate setting in UI, a real launcher icon | ⬜ Not started |
+| 7 | Schedule playback: dwell at stops, filter trips by date + departure window, follow the timetable in real time with a live ahead/behind offset | 🟡 Code written. Timeline, calendar, filter, service clock and dwell are unit tested (38 `:core` tests total); the UI hasn't been run |
 
 The first commit was written in an environment without access to Google's
 Maven repository, so **`:app` has not been compiled yet**. Also, the AGP,
@@ -78,6 +79,35 @@ sync complains, and fix any compile errors before moving on to phase 4.
   - Inserting only happens for taps near the line; the web app inserts
     wherever you click. That avoids stray points from taps on a touchscreen.
     Worth porting the proximity check to the web app too, if wanted.
+
+## Schedule playback (phase 7)
+
+| Question | Decision |
+| --- | --- |
+| Clock | Real time of day in the agency's timezone (`agency_timezone`, falling back to the device zone). The service day (today or yesterday) is picked so that after-midnight trips (24:00+) work |
+| Ahead/behind | A fixed offset, adjustable live (−10 to +30 min in 30 s steps, plus presets). Changing it moves the vehicle immediately |
+| Dwell | The scheduled arrival→departure, with a minimum (default 20 s). The departure is kept and the arrival is pulled earlier, but never before leaving the previous stop |
+| Filter | A date plus a departure window. Service must run that date (`calendar.txt` + `calendar_dates.txt`; if a feed has neither, every trip counts as running). Previous-day trips departing after midnight are included |
+| Pause | Holds the vehicle. On Play the offset is recomputed so it continues from the same spot, now later than scheduled |
+| Position scrub | In schedule mode, dragging the position sets the offset implied by the new spot |
+| Fixed-speed mode | Also stops `minDwellSec` at each stop (toggle). Dwell time is scaled by the speed multiplier |
+
+Data: import now always streams `stop_times.txt` once, keeping only each
+trip's first departure and last arrival. A staged trip's full timetable is read
+by a second streaming pass (`GtfsParser.readTripStops`), with blank times at
+non-timepoint stops interpolated by distance. Stops are projected onto the
+route and re-projected after edits.
+
+Known limits:
+- `frequencies.txt` (headway-based trips) isn't supported.
+- On DST-change days, the service day's origin is local midnight rather than
+  GTFS's "noon minus 12h", so times can be off by an hour.
+- Routes staged before this change have no timetable. Re-stage them to enable
+  schedule mode.
+
+**Web app parity:** the web app has none of this yet (no timetable, dwell or
+filter). Porting it would mean mirroring `schedule/` in `web/lib`. Not planned
+unless asked.
 
 ## Open decisions
 - **Route exchange with the web app.** Not planned. If it's wanted later, a

@@ -35,8 +35,8 @@ import org.maplibre.android.style.sources.GeoJsonSource
 import kotlin.math.hypot
 
 /**
- * Owns a MapLibre [MapView] showing a route, its waypoints (in edit mode) and
- * the playback position. It's deliberately free of Compose; `RouteMap.kt`
+ * Owns a MapLibre [MapView] showing a route, its timetable stops, its waypoints
+ * (in edit mode) and the playback position. It's deliberately free of Compose; `RouteMap.kt`
  * wraps it and forwards lifecycle events and state.
  *
  * Edit gestures (when [update] is called with editable = true):
@@ -59,6 +59,7 @@ class RouteMapController(context: Context) {
     // Desired state, applied whenever the style is ready.
     private var routeKey: String? = null
     private var waypoints: List<LatLon> = emptyList()
+    private var stops: List<LatLon> = emptyList()
     private var position: LatLon? = null
     private var bearing: Double? = null
     private var autoPan = false
@@ -67,6 +68,7 @@ class RouteMapController(context: Context) {
 
     // What has been applied, to avoid redundant work at the 4 Hz update rate.
     private var renderedWaypoints: List<LatLon>? = null
+    private var renderedStops: List<LatLon>? = null
     private var renderedEditable: Boolean? = null
     private var fittedKey: String? = null
     private var pannedTo: LatLon? = null
@@ -109,6 +111,7 @@ class RouteMapController(context: Context) {
     fun update(
         routeKey: String?,
         waypoints: List<LatLon>,
+        stops: List<LatLon>,
         position: LatLon?,
         bearing: Double?,
         autoPan: Boolean,
@@ -117,6 +120,7 @@ class RouteMapController(context: Context) {
     ) {
         this.routeKey = routeKey
         this.waypoints = waypoints
+        this.stops = stops
         this.position = position
         this.bearing = bearing
         this.autoPan = autoPan
@@ -132,6 +136,10 @@ class RouteMapController(context: Context) {
         if (touchIndex == null && renderedWaypoints !== waypoints) {
             setRouteGeometry(s, waypoints)
             renderedWaypoints = waypoints
+        }
+        if (renderedStops !== stops) {
+            s.getSourceAs<GeoJsonSource>(STOPS_SOURCE)?.setGeoJson(GeoJson.vertices(stops))
+            renderedStops = stops
         }
         if (renderedEditable != editable) {
             s.getLayer(VERTICES_LAYER)?.setProperties(
@@ -178,6 +186,7 @@ class RouteMapController(context: Context) {
         s.addImage(DOT_IMAGE, positionBitmap(withArrow = false))
         s.addSource(GeoJsonSource(ROUTE_SOURCE))
         s.addSource(GeoJsonSource(VERTICES_SOURCE))
+        s.addSource(GeoJsonSource(STOPS_SOURCE))
         s.addSource(GeoJsonSource(POSITION_SOURCE))
         s.addLayer(
             LineLayer(ROUTE_LAYER, ROUTE_SOURCE).withProperties(
@@ -185,6 +194,15 @@ class RouteMapController(context: Context) {
                 PropertyFactory.lineWidth(4f),
                 PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
                 PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            ),
+        )
+        // Timetable stops: small dark-ringed dots, under the editable waypoints.
+        s.addLayer(
+            CircleLayer(STOPS_LAYER, STOPS_SOURCE).withProperties(
+                PropertyFactory.circleRadius(4.5f),
+                PropertyFactory.circleColor(Color.WHITE),
+                PropertyFactory.circleStrokeColor(STOP_COLOR),
+                PropertyFactory.circleStrokeWidth(2f),
             ),
         )
         s.addLayer(
@@ -363,12 +381,15 @@ class RouteMapController(context: Context) {
         const val ROUTE_SOURCE = "route"
         const val VERTICES_SOURCE = "vertices"
         const val POSITION_SOURCE = "position"
+        const val STOPS_SOURCE = "stops"
+        const val STOPS_LAYER = "stops"
         const val ROUTE_LAYER = "route-line"
         const val VERTICES_LAYER = "route-vertices"
         const val POSITION_LAYER = "position"
         const val ARROW_IMAGE = "position-arrow"
         const val DOT_IMAGE = "position-dot"
         const val ROUTE_COLOR = "#3B82F6" // same blue as the web editor
+        const val STOP_COLOR = "#374151"
         val POSITION_COLOR = Color.rgb(0x1E, 0x6F, 0xD9)
         const val PAN_MS = 300
         const val VERTEX_RADIUS_DP = 24.0

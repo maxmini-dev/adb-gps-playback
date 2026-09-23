@@ -19,8 +19,14 @@ import androidx.core.content.ContextCompat
 import dev.maxmini.gpsplayback.AppStore
 import dev.maxmini.gpsplayback.R
 import dev.maxmini.gpsplayback.core.model.EditableRoute
+import dev.maxmini.gpsplayback.core.model.PlaybackMode
+import dev.maxmini.gpsplayback.core.model.PlayerState
+import dev.maxmini.gpsplayback.core.schedule.offsetToHoldPositionNow
+import dev.maxmini.gpsplayback.core.schedule.scheduleNow
+import dev.maxmini.gpsplayback.core.schedule.zoneOrDefault
 import dev.maxmini.gpsplayback.core.playback.PlaybackEngine
 import dev.maxmini.gpsplayback.mock.MockLocationSink
+import dev.maxmini.gpsplayback.ui.formatOffset
 import dev.maxmini.gpsplayback.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,15 +57,12 @@ class PlaybackService : Service() {
         when (intent?.action) {
             ACTION_PLAY -> {
                 val route = AppStore.activeRoute() ?: return stopAll()
-                AppStore.setPlayer { p ->
-                    // Restart from the beginning if we were parked at the end.
-                    val atEnd = p.routeId == route.id && p.progressMeters >= totalMeters(route)
-                    p.copy(routeId = route.id, playing = true, progressMeters = if (atEnd) 0.0 else p.progressMeters)
-                }
+                AppStore.setPlayer { p -> startState(route, p) }
                 if (!ensureRunning()) return START_NOT_STICKY
             }
             ACTION_PAUSE -> {
-                AppStore.setPlayer { it.copy(playing = false) }
+                // In schedule mode, resuming later keeps the vehicle here (it falls behind).
+                AppStore.setPlayer { it.copy(playing = false, holdPosition = it.mode == PlaybackMode.SCHEDULE) }
                 if (loop == null) return stopAll()
             }
             ACTION_STOP -> return stopAll()
@@ -107,7 +110,7 @@ class PlaybackService : Service() {
 
     private suspend fun CoroutineScope.tickLoop(sink: MockLocationSink, tickMs: Long) {
         var engine: PlaybackEngine? = null
-        var engineFor: List<*>? = null
+        var engineFor: EditableRoute? = null
         var last = SystemClock.elapsedRealtime()
         var lastNotif = 0L
         var wasPlaying = AppStore.player.value.playing
@@ -122,13 +125,21 @@ class PlaybackService : Service() {
                 return
             }
             // Rebuild when the route or its geometry changes (e.g. edited while playing).
-            if (engine == null || engineFor !== route.waypoints) {
-                engine = PlaybackEngine(route.waypoints)
-                engineFor = route.waypoints
+            val prev = engineFor
+            if (engine == null || prev == null || prev.id != route.id || prev.waypoints !== route.waypoints) {
+                engine = PlaybackEngine(route.waypoints, route.stops)
+                engineFor = route
             }
 
             val before = AppStore.player.value
-            val next = engine.advance(before, dt)
+            val serviceNow = if (before.mode == PlaybackMode.SCHEDULE) {
+                engine.timeline(before.minDwellSec)?.let { tl ->
+                    scheduleNow(tl, before.scheduleOffsetSec, System.currentTimeMillis(), zoneOrDefault(route.timezone))
+                }
+            } else {
+                null
+            }
+            val next = engine.advance(before, dt, serviceNow)
             if (next != before) AppStore.setPlayer(persist = false) { next }
 
             try {
@@ -191,6 +202,11 @@ class PlaybackService : Service() {
         val total = route?.let { totalMeters(it) } ?: 0.0
         val pct = if (total > 0) (player.progressMeters / total).coerceIn(0.0, 1.0) else 0.0
         val speed = PlaybackEngine.effectiveSpeed(player) * 3.6
+        val detail = if (player.mode == PlaybackMode.SCHEDULE && (route?.stops?.size ?: 0) >= 2) {
+            formatOffset(player.scheduleOffsetSec)
+        } else {
+            "%.0f km/h".format(speed)
+        }
 
         val toggle = if (player.playing) {
             NotificationCompat.Action(R.drawable.ic_pause, "Pause", servicePending(ACTION_PAUSE))
@@ -206,9 +222,9 @@ class PlaybackService : Service() {
             .setSmallIcon(R.drawable.ic_stat_location)
             .setContentTitle(route?.label ?: getString(R.string.app_name))
             .setContentText(
-                "%s · %.2f / %.2f km · %.0f km/h".format(
+                "%s · %.2f / %.2f km · %s".format(
                     if (player.playing) "Playing" else "Paused",
-                    player.progressMeters / 1000, total / 1000, speed,
+                    player.progressMeters / 1000, total / 1000, detail,
                 ),
             )
             .setProgress(1000, (pct * 1000).toInt(), false)
@@ -247,6 +263,25 @@ class PlaybackService : Service() {
 
         private fun totalMeters(route: EditableRoute) =
             dev.maxmini.gpsplayback.core.geo.polylineLengthMeters(route.waypoints)
+
+        /** Player state for pressing Play on [route]. */
+        private fun startState(route: EditableRoute, p: PlayerState): PlayerState {
+            var q = p.copy(routeId = route.id, playing = true)
+            val timeline = PlaybackEngine(route.waypoints, route.stops).timeline(q.minDwellSec)
+            if (q.mode == PlaybackMode.SCHEDULE && timeline != null) {
+                // Resuming after Pause / scrubbing: stay put, the delay grows instead.
+                if (q.holdPosition && p.routeId == route.id) {
+                    val offset = offsetToHoldPositionNow(
+                        timeline, q.progressMeters, q.scheduleOffsetSec,
+                        System.currentTimeMillis(), zoneOrDefault(route.timezone),
+                    )
+                    q = q.copy(scheduleOffsetSec = offset)
+                }
+            } else if (p.routeId == route.id && p.progressMeters >= totalMeters(route)) {
+                q = q.copy(progressMeters = 0.0) // Restart if parked at the end.
+            }
+            return q.copy(holdPosition = false)
+        }
 
         fun play(context: Context) = ContextCompat.startForegroundService(
             context, Intent(context, PlaybackService::class.java).setAction(ACTION_PLAY),

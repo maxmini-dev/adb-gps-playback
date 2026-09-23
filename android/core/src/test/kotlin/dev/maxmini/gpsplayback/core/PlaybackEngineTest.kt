@@ -40,7 +40,7 @@ class PlaybackEngineTest {
     }
 
     @Test fun jitterStaysNearTruthAndReportsAccuracy() {
-        val engine = PlaybackEngine(route, Random(1234))
+        val engine = PlaybackEngine(route, random = Random(1234))
         val s = PlayerState(progressMeters = 556.0, jitter = JitterSettings(enabled = true, sigmaMeters = 5.0))
         val truth = PlaybackEngine(route).fixFor(s.copy(jitter = JitterSettings()), 0.25).position
         var sumSq = 0.0

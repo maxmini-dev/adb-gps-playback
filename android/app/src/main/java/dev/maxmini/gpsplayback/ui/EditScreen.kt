@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,6 +44,8 @@ fun EditScreen(onNeedRoute: () -> Unit, onPlay: () -> Unit) {
         }
         return
     }
+
+    val stopPoints = remember(route.stops) { route.stops.map { it.point } }
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -74,6 +77,7 @@ fun EditScreen(onNeedRoute: () -> Unit, onPlay: () -> Unit) {
         RouteMap(
             routeKey = route.id,
             waypoints = route.waypoints,
+            stops = stopPoints,
             editable = true,
             onEdit = { AppStore.editRoute(route.id, it) },
             modifier = Modifier.fillMaxWidth().weight(1f),

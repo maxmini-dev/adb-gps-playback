@@ -24,6 +24,7 @@ fun RouteMap(
     routeKey: String?,
     waypoints: List<LatLon>,
     modifier: Modifier = Modifier,
+    stops: List<LatLon> = emptyList(),
     position: LatLon? = null,
     bearing: Double? = null,
     autoPan: Boolean = false,
@@ -57,7 +58,7 @@ fun RouteMap(
         factory = { controller.mapView },
         modifier = modifier,
         update = {
-            controller.update(routeKey, waypoints, position, bearing, autoPan, editable) { currentOnEdit(it) }
+            controller.update(routeKey, waypoints, stops, position, bearing, autoPan, editable) { currentOnEdit(it) }
         },
     )
 }

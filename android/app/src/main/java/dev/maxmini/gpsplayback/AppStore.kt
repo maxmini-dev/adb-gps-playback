@@ -7,7 +7,10 @@ import dev.maxmini.gpsplayback.core.edit.applyEdit
 import dev.maxmini.gpsplayback.core.model.EditableRoute
 import dev.maxmini.gpsplayback.core.model.GtfsData
 import dev.maxmini.gpsplayback.core.model.PlayerState
+import dev.maxmini.gpsplayback.core.gtfs.GtfsParser
 import dev.maxmini.gpsplayback.core.model.editableRouteFor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,6 +18,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.InputStream
 import java.util.concurrent.Executors
 
 @Serializable
@@ -51,6 +55,8 @@ object AppStore {
     private lateinit var file: File
 
     private val _gtfs = MutableStateFlow<GtfsData?>(null)
+    /** Re-opens the loaded feed's zip, for reading a trip's timetable when staging. */
+    private var gtfsSource: (() -> InputStream)? = null
     private val _routes = MutableStateFlow<Map<String, EditableRoute>>(emptyMap())
     private val _player = MutableStateFlow(PlayerState())
     private val _settings = MutableStateFlow(Settings())
@@ -79,14 +85,34 @@ object AppStore {
         return _player.value.routeId?.let { routes[it] } ?: routes.values.firstOrNull()
     }
 
-    fun setGtfs(data: GtfsData?) {
+    fun setGtfs(data: GtfsData?, source: (() -> InputStream)?) {
         _gtfs.value = data
+        gtfsSource = source
     }
 
-    fun addRouteFromTrip(tripId: String) {
-        val route = _gtfs.value?.editableRouteFor(tripId) ?: return
+    /**
+     * Stage a trip, reading its timetable from the feed (a streaming pass over
+     * stop_times.txt, so this runs on the IO dispatcher). Returns a message if
+     * something went wrong or the trip was staged without a timetable.
+     */
+    suspend fun stageTrip(tripId: String): String? {
+        val data = _gtfs.value ?: return "No feed loaded."
+        val source = gtfsSource
+        var warning: String? = null
+        val stops = if (source == null) {
+            emptyList()
+        } else {
+            try {
+                withContext(Dispatchers.IO) { GtfsParser.readTripStops(source, tripId, data.stops) }
+            } catch (e: Exception) {
+                warning = "Couldn't read the timetable (${e.message}); staged without it."
+                emptyList()
+            }
+        }
+        val route = data.editableRouteFor(tripId, stops) ?: return "This trip has no shape to follow."
         _routes.update { it + (route.id to route) }
         save()
+        return warning ?: if (stops.size < 2) "Staged without a timetable: schedule mode won't be available." else null
     }
 
     /** Apply a waypoint edit (move / insert / delete / reset) to a staged route. */

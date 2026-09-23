@@ -18,6 +18,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,13 +28,26 @@ import dev.maxmini.gpsplayback.AppStore
 import dev.maxmini.gpsplayback.core.geo.bearingAtDistance
 import dev.maxmini.gpsplayback.core.geo.cumulativeDistances
 import dev.maxmini.gpsplayback.core.geo.pointAtDistance
+import dev.maxmini.gpsplayback.core.gtfs.formatGtfsTime
+import dev.maxmini.gpsplayback.core.model.EditableRoute
+import dev.maxmini.gpsplayback.core.model.PlaybackMode
+import dev.maxmini.gpsplayback.core.model.PlayerState
 import dev.maxmini.gpsplayback.core.playback.PlaybackEngine
+import dev.maxmini.gpsplayback.core.schedule.ScheduleTimeline
+import dev.maxmini.gpsplayback.core.schedule.offsetToHoldPositionNow
+import dev.maxmini.gpsplayback.core.schedule.scheduleNow
+import dev.maxmini.gpsplayback.core.schedule.zoneOrDefault
 import dev.maxmini.gpsplayback.playback.PlaybackService
 import dev.maxmini.gpsplayback.ui.map.RouteMap
+import kotlinx.coroutines.delay
 import java.text.DateFormat
 import java.util.Date
+import kotlin.math.roundToInt
 
 private val MULTIPLIERS = listOf(0.5, 1.0, 2.0, 5.0, 10.0, 20.0)
+private const val OFFSET_MIN_SEC = -10 * 60
+private const val OFFSET_MAX_SEC = 30 * 60
+private const val OFFSET_STEP_SEC = 30
 
 @Composable
 fun PlayScreen(onNeedRoute: () -> Unit) {
@@ -57,19 +71,31 @@ fun PlayScreen(onNeedRoute: () -> Unit) {
     val total = cum.last()
     val position = pointAtDistance(route.waypoints, cum, player.progressMeters)
     val bearing = bearingAtDistance(route.waypoints, cum, player.progressMeters)
+    val stopPoints = remember(route.stops) { route.stops.map { it.point } }
+    val engine = remember(route.waypoints, route.stops) { PlaybackEngine(route.waypoints, route.stops) }
+    val timeline = engine.timeline(player.minDwellSec)
+    val scheduleMode = player.mode == PlaybackMode.SCHEDULE && timeline != null
+    // Wall clock for the schedule panel; ticks even while paused.
+    val nowMs by produceState(System.currentTimeMillis()) {
+        while (true) {
+            value = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)) {
             RoutePicker(route.label, routes.values.map { it.id to it.label }) { id ->
                 if (id != route.id) {
                     PlaybackService.stop(context)
-                    AppStore.setPlayer { it.copy(routeId = id, progressMeters = 0.0, playing = false) }
+                    AppStore.setPlayer { it.copy(routeId = id, progressMeters = 0.0, playing = false, holdPosition = false) }
                 }
             }
         }
         RouteMap(
             routeKey = route.id,
             waypoints = route.waypoints,
+            stops = stopPoints,
             position = position,
             bearing = bearing,
             autoPan = player.autoPan,
@@ -91,6 +117,15 @@ fun PlayScreen(onNeedRoute: () -> Unit) {
             }
             StatusLine(status.serviceRunning, status.lastError, status.lastSentAt)
 
+            ModePicker(player, hasSchedule = timeline != null)
+
+            if (scheduleMode) {
+                SchedulePanel(route, player, timeline!!, nowMs)
+            } else {
+                SpeedPanel(player, hasStops = engine.stopDistances.isNotEmpty())
+            }
+            JitterPanel(player)
+
             Section("Position") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Keep map centered on position", Modifier.weight(1f))
@@ -101,55 +136,165 @@ fun PlayScreen(onNeedRoute: () -> Unit) {
                         position.lat, position.lon, player.progressMeters / 1000, total / 1000, route.waypoints.size,
                     ),
                 )
+                if (scheduleMode) Muted("Dragging moves the vehicle and changes how late it is.")
                 Slider(
                     value = player.progressMeters.toFloat().coerceAtMost(total.toFloat()),
-                    onValueChange = { v -> AppStore.setPlayer(persist = false) { it.copy(progressMeters = v.toDouble()) } },
+                    onValueChange = { v ->
+                        AppStore.setPlayer(persist = false) { p ->
+                            val moved = p.copy(progressMeters = v.toDouble())
+                            if (!scheduleMode) return@setPlayer moved
+                            // Schedule mode: the new position implies a new delay.
+                            val offset = offsetToHoldPositionNow(
+                                timeline!!, v.toDouble(), p.scheduleOffsetSec,
+                                System.currentTimeMillis(), zoneOrDefault(route.timezone),
+                            )
+                            moved.copy(scheduleOffsetSec = offset, holdPosition = !p.playing)
+                        }
+                    },
                     onValueChangeFinished = { AppStore.save() },
                     valueRange = 0f..maxOf(total.toFloat(), 1f),
                 )
             }
+        }
+    }
+}
 
-            Section("Speed") {
-                val kmh = PlaybackEngine.effectiveSpeed(player) * 3.6
-                Muted("Base %.1f m/s × %s = %.0f km/h".format(player.baseSpeedMps, fmtMultiplier(player.speedMultiplier), kmh))
-                Slider(
-                    value = player.baseSpeedMps.toFloat(),
-                    onValueChange = { v -> AppStore.setPlayer(persist = false) { it.copy(baseSpeedMps = v.toDouble()) } },
-                    onValueChangeFinished = { AppStore.save() },
-                    valueRange = 1f..40f,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    MULTIPLIERS.forEach { m ->
-                        val selected = m == player.speedMultiplier
-                        val onClick = { AppStore.setPlayer { it.copy(speedMultiplier = m) } }
-                        if (selected) Button(onClick = onClick) { Text(fmtMultiplier(m)) }
-                        else TextButton(onClick = onClick) { Text(fmtMultiplier(m)) }
-                    }
-                }
-            }
+@Composable
+private fun ModePicker(player: PlayerState, hasSchedule: Boolean) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        PlaybackMode.entries.forEach { mode ->
+            val label = if (mode == PlaybackMode.SCHEDULE) "Follow schedule" else "Fixed speed"
+            val selected = player.mode == mode && (hasSchedule || mode == PlaybackMode.FIXED_SPEED)
+            val onClick = { AppStore.setPlayer { it.copy(mode = mode, holdPosition = false) } }
+            val enabled = hasSchedule || mode == PlaybackMode.FIXED_SPEED
+            if (selected) Button(onClick = onClick, enabled = enabled) { Text(label) }
+            else OutlinedButton(onClick = onClick, enabled = enabled) { Text(label) }
+        }
+    }
+    if (!hasSchedule) Muted("No timetable for this route. Re-stage the trip from Load to follow its schedule.")
+}
 
-            Section("GPS jitter") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Simulate receiver noise")
-                        Muted("Slowly drifting error, σ = %.0f m per axis".format(player.jitter.sigmaMeters))
-                    }
-                    Switch(
-                        checked = player.jitter.enabled,
-                        onCheckedChange = { v -> AppStore.setPlayer { it.copy(jitter = it.jitter.copy(enabled = v)) } },
-                    )
+@Composable
+private fun SchedulePanel(route: EditableRoute, player: PlayerState, timeline: ScheduleTimeline, nowMs: Long) {
+    val zone = zoneOrDefault(route.timezone)
+    val serviceNow = scheduleNow(timeline, player.scheduleOffsetSec, nowMs, zone)
+    val s = serviceNow - player.scheduleOffsetSec // where the schedule puts the vehicle now
+
+    Section("Schedule") {
+        Muted("Now %s (%s) · trip %s–%s".format(
+            formatGtfsTime(serviceNow.toInt(), withSeconds = true), zone.id,
+            formatGtfsTime(timeline.startSec.toInt()), formatGtfsTime(timeline.endSec.toInt()),
+        ))
+        Text(formatOffset(player.scheduleOffsetSec))
+        Slider(
+            value = player.scheduleOffsetSec.coerceIn(OFFSET_MIN_SEC, OFFSET_MAX_SEC).toFloat(),
+            onValueChange = { v ->
+                val offset = (v / OFFSET_STEP_SEC).roundToInt() * OFFSET_STEP_SEC
+                AppStore.setPlayer(persist = false) { p ->
+                    // Move the vehicle to match the new delay right away, even when paused.
+                    val at = timeline.distanceAt(scheduleNow(timeline, offset, System.currentTimeMillis(), zone) - offset)
+                    p.copy(scheduleOffsetSec = offset, progressMeters = at, holdPosition = false)
                 }
-                Slider(
-                    enabled = player.jitter.enabled,
-                    value = player.jitter.sigmaMeters.toFloat(),
-                    onValueChange = { v ->
-                        AppStore.setPlayer(persist = false) { it.copy(jitter = it.jitter.copy(sigmaMeters = v.toDouble())) }
-                    },
-                    onValueChangeFinished = { AppStore.save() },
-                    valueRange = 1f..30f,
-                )
+            },
+            onValueChangeFinished = { AppStore.save() },
+            valueRange = OFFSET_MIN_SEC.toFloat()..OFFSET_MAX_SEC.toFloat(),
+            steps = (OFFSET_MAX_SEC - OFFSET_MIN_SEC) / OFFSET_STEP_SEC - 1,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf(-120 to "−2 min", 0 to "On time", 300 to "+5 min", 600 to "+10 min").forEach { (sec, label) ->
+                TextButton(onClick = {
+                    AppStore.setPlayer { p ->
+                        val at = timeline.distanceAt(scheduleNow(timeline, sec, System.currentTimeMillis(), zone) - sec)
+                        p.copy(scheduleOffsetSec = sec, progressMeters = at, holdPosition = false)
+                    }
+                }) { Text(label) }
             }
         }
+        Muted(phaseText(route, timeline, s))
+        if (player.holdPosition && !player.playing) {
+            Muted("Paused: on Play the vehicle continues from here, later than scheduled.")
+        }
+        DwellSlider(player)
+    }
+}
+
+private fun phaseText(route: EditableRoute, tl: ScheduleTimeline, s: Double): String {
+    fun name(i: Int) = route.stops.getOrNull(i)?.let { it.name ?: it.stopId } ?: "stop ${i + 1}"
+    return when (val p = tl.phaseAt(s)) {
+        ScheduleTimeline.Phase.BeforeStart ->
+            "Waiting at ${name(0)}, departs ${formatGtfsTime(tl.departureSec(0).toInt())} (in ${formatDuration((tl.startSec - s).toInt())})"
+        is ScheduleTimeline.Phase.AtStop ->
+            "At ${name(p.index)}, departs ${formatGtfsTime(tl.departureSec(p.index).toInt(), withSeconds = true)}"
+        is ScheduleTimeline.Phase.Moving ->
+            "Next: ${name(p.from + 1)} at ${formatGtfsTime(tl.arrivalSec(p.from + 1).toInt(), withSeconds = true)} " +
+                "(in ${formatDuration((tl.arrivalSec(p.from + 1) - s).toInt())})"
+        ScheduleTimeline.Phase.Finished ->
+            "Trip finished at ${formatGtfsTime(tl.endSec.toInt())}. Add delay or pick a later trip."
+    }
+}
+
+@Composable
+private fun SpeedPanel(player: PlayerState, hasStops: Boolean) {
+    Section("Speed") {
+        val kmh = PlaybackEngine.effectiveSpeed(player) * 3.6
+        Muted("Base %.1f m/s × %s = %.0f km/h".format(player.baseSpeedMps, fmtMultiplier(player.speedMultiplier), kmh))
+        Slider(
+            value = player.baseSpeedMps.toFloat(),
+            onValueChange = { v -> AppStore.setPlayer(persist = false) { it.copy(baseSpeedMps = v.toDouble()) } },
+            onValueChangeFinished = { AppStore.save() },
+            valueRange = 1f..40f,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            MULTIPLIERS.forEach { m ->
+                val onClick = { AppStore.setPlayer { it.copy(speedMultiplier = m) } }
+                if (m == player.speedMultiplier) Button(onClick = onClick) { Text(fmtMultiplier(m)) }
+                else TextButton(onClick = onClick) { Text(fmtMultiplier(m)) }
+            }
+        }
+        if (hasStops) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Stop at each stop", Modifier.weight(1f))
+                Switch(checked = player.stopAtStops, onCheckedChange = { v -> AppStore.setPlayer { it.copy(stopAtStops = v) } })
+            }
+            if (player.stopAtStops) DwellSlider(player)
+        }
+    }
+}
+
+@Composable
+private fun DwellSlider(player: PlayerState) {
+    Muted("Minimum stop time: ${player.minDwellSec} s")
+    Slider(
+        value = player.minDwellSec.toFloat(),
+        onValueChange = { v -> AppStore.setPlayer(persist = false) { it.copy(minDwellSec = (v / 5).roundToInt() * 5) } },
+        onValueChangeFinished = { AppStore.save() },
+        valueRange = 0f..120f,
+        steps = 120 / 5 - 1,
+    )
+}
+
+@Composable
+private fun JitterPanel(player: PlayerState) {
+    Section("GPS jitter") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Simulate receiver noise")
+                Muted("Slowly drifting error, σ = %.0f m per axis".format(player.jitter.sigmaMeters))
+            }
+            Switch(
+                checked = player.jitter.enabled,
+                onCheckedChange = { v -> AppStore.setPlayer { it.copy(jitter = it.jitter.copy(enabled = v)) } },
+            )
+        }
+        Slider(
+            enabled = player.jitter.enabled,
+            value = player.jitter.sigmaMeters.toFloat(),
+            onValueChange = { v ->
+                AppStore.setPlayer(persist = false) { it.copy(jitter = it.jitter.copy(sigmaMeters = v.toDouble())) }
+            },
+            onValueChangeFinished = { AppStore.save() },
+            valueRange = 1f..30f,
+        )
     }
 }
 
