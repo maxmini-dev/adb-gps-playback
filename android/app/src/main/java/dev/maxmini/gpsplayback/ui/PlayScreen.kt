@@ -7,24 +7,37 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import dev.maxmini.gpsplayback.AppStore
+import dev.maxmini.gpsplayback.R
 import dev.maxmini.gpsplayback.core.geo.bearingAtDistance
 import dev.maxmini.gpsplayback.core.geo.cumulativeDistances
 import dev.maxmini.gpsplayback.core.geo.pointAtDistance
@@ -38,6 +51,7 @@ import kotlin.math.roundToInt
 
 private val MULTIPLIERS = listOf(0.5, 1.0, 2.0, 5.0, 10.0, 20.0)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayScreen(onNeedRoute: () -> Unit) {
     val context = LocalContext.current
@@ -66,65 +80,122 @@ fun PlayScreen(onNeedRoute: () -> Unit) {
     }
     val hasStops = stopDistances.isNotEmpty()
 
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)) {
-            RoutePicker(route.label, routes.values.map { it.id to it.label }) { id ->
-                if (id != route.id) {
-                    PlaybackService.stop(context)
-                    AppStore.setPlayer { it.copy(routeId = id, progressMeters = 0.0, playing = false) }
+    val sheetState = rememberBottomSheetScaffoldState()
+    val density = LocalDensity.current
+    // Peek height is measured from the peek content so it survives font scaling.
+    var peekHeight by remember { mutableStateOf(0.dp) }
+
+    BottomSheetScaffold(
+        scaffoldState = sheetState,
+        sheetPeekHeight = peekHeight,
+        sheetDragHandle = null,
+        sheetContent = {
+            Column(
+                Modifier.fillMaxWidth().onSizeChanged { peekHeight = with(density) { it.height.toDp() } },
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                BottomSheetDefaults.DragHandle()
+                TransportBar(player.playing, status.serviceRunning, player.progressMeters, total, stopDistances)
+                Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
+                    StatusLine(status.serviceRunning, status.lastError, status.lastSentAt)
                 }
             }
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AlongRoute(player.progressMeters, total)
+
+                SpeedPanel(player, hasStops)
+                JitterPanel(player)
+
+                Section("Position") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Keep map centered on position", Modifier.weight(1f))
+                        Switch(checked = player.autoPan, onCheckedChange = { v -> AppStore.setPlayer { it.copy(autoPan = v) } })
+                    }
+                    Muted("%.6f, %.6f · %d pts".format(position.lat, position.lon, route.waypoints.size))
+                }
+            }
+        },
+    ) { padding ->
+        // The collapsed sheet sits over the bottom of the map; pad the map by the
+        // peek height so the route and position marker aren't hidden behind it.
+        Column(Modifier.fillMaxSize().padding(padding).padding(bottom = peekHeight)) {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)) {
+                RoutePicker(route.label, routes.values.map { it.id to it.label }) { id ->
+                    if (id != route.id) {
+                        PlaybackService.stop(context)
+                        AppStore.setPlayer { it.copy(routeId = id, progressMeters = 0.0, playing = false) }
+                    }
+                }
+            }
+            RouteMap(
+                routeKey = route.id,
+                waypoints = route.waypoints,
+                stops = stopPoints,
+                position = position,
+                bearing = bearing,
+                autoPan = player.autoPan,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
         }
-        RouteMap(
-            routeKey = route.id,
-            waypoints = route.waypoints,
-            stops = stopPoints,
-            position = position,
-            bearing = bearing,
-            autoPan = player.autoPan,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        )
-        Column(
-            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+    }
+}
+
+private fun seek(meters: Double, total: Double, persist: Boolean = true) =
+    AppStore.setPlayer(persist) { it.copy(progressMeters = meters.coerceIn(0.0, total)) }
+
+/**
+ * Always-visible controls in the collapsed sheet: previous stop, play/pause,
+ * stop mocking, next stop. The stop buttons are disabled when the route has no
+ * stops or there's no stop in that direction.
+ */
+@Composable
+private fun TransportBar(
+    playing: Boolean,
+    serviceRunning: Boolean,
+    progressMeters: Double,
+    total: Double,
+    stopDistances: DoubleArray,
+) {
+    val context = LocalContext.current
+    val prev = PlaybackEngine.previousStopBefore(stopDistances, progressMeters)
+    val next = PlaybackEngine.nextStopAfter(stopDistances, progressMeters)
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(enabled = prev != null, onClick = { prev?.let { seek(it, total) } }) {
+            Icon(painterResource(R.drawable.ic_skip_previous), contentDescription = "Previous stop")
+        }
+        FilledIconButton(
+            onClick = { if (playing) PlaybackService.pause(context) else PlaybackService.play(context) },
+            modifier = Modifier.size(56.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (player.playing) {
-                    Button(onClick = { PlaybackService.pause(context) }) { Text("Pause") }
-                } else {
-                    Button(onClick = { PlaybackService.play(context) }) { Text("Play") }
-                }
-                OutlinedButton(enabled = status.serviceRunning, onClick = { PlaybackService.stop(context) }) {
-                    Text("Stop mocking")
-                }
-            }
-            StatusLine(status.serviceRunning, status.lastError, status.lastSentAt)
-
-            AlongRoute(player.progressMeters, total, stopDistances)
-
-            SpeedPanel(player, hasStops)
-            JitterPanel(player)
-
-            Section("Position") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Keep map centered on position", Modifier.weight(1f))
-                    Switch(checked = player.autoPan, onCheckedChange = { v -> AppStore.setPlayer { it.copy(autoPan = v) } })
-                }
-                Muted("%.6f, %.6f · %d pts".format(position.lat, position.lon, route.waypoints.size))
-            }
+            Icon(
+                painterResource(if (playing) R.drawable.ic_pause else R.drawable.ic_play),
+                contentDescription = if (playing) "Pause" else "Play",
+            )
+        }
+        IconButton(enabled = serviceRunning, onClick = { PlaybackService.stop(context) }) {
+            Icon(painterResource(R.drawable.ic_stop), contentDescription = "Stop mocking")
+        }
+        IconButton(enabled = next != null, onClick = { next?.let { seek(it, total) } }) {
+            Icon(painterResource(R.drawable.ic_skip_next), contentDescription = "Next stop")
         }
     }
 }
 
 /**
- * Jump anywhere along the route: percentage slider, quick presets, and
- * previous/next stop. Works while playing too; the service picks up the new
- * position on its next tick.
+ * Jump anywhere along the route: percentage slider and quick presets.
+ * Previous/next stop live in [TransportBar]. Works while playing too; the
+ * service picks up the new position on its next tick.
  */
 @Composable
-private fun AlongRoute(progressMeters: Double, total: Double, stopDistances: DoubleArray) {
-    fun seek(meters: Double, persist: Boolean = true) =
-        AppStore.setPlayer(persist) { it.copy(progressMeters = meters.coerceIn(0.0, total)) }
+private fun AlongRoute(progressMeters: Double, total: Double) {
     val fraction = if (total > 0) (progressMeters / total).coerceIn(0.0, 1.0) else 0.0
 
     Section("Along route") {
@@ -137,21 +208,13 @@ private fun AlongRoute(progressMeters: Double, total: Double, stopDistances: Dou
         }
         Slider(
             value = fraction.toFloat(),
-            onValueChange = { f -> seek(f * total, persist = false) },
+            onValueChange = { f -> seek(f * total, total, persist = false) },
             onValueChangeFinished = { AppStore.save() },
             valueRange = 0f..1f,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf(0, 25, 50, 75, 100).forEach { pct ->
-                TextButton(onClick = { seek(total * pct / 100) }) { Text("$pct%") }
-            }
-        }
-        if (stopDistances.isNotEmpty()) {
-            val prev = PlaybackEngine.previousStopBefore(stopDistances, progressMeters)
-            val next = PlaybackEngine.nextStopAfter(stopDistances, progressMeters)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(enabled = prev != null, onClick = { prev?.let { seek(it) } }) { Text("◀ Prev stop") }
-                OutlinedButton(enabled = next != null, onClick = { next?.let { seek(it) } }) { Text("Next stop ▶") }
+                TextButton(onClick = { seek(total * pct / 100, total) }) { Text("$pct%") }
             }
         }
     }

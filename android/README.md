@@ -45,17 +45,17 @@ location from there rather than from the platform providers.
    - **Tap** near the line to insert a point into the nearest segment
    - **Long-press** a point to delete it (a route always keeps at least 2)
    - **Reset** restores the original GTFS geometry
-3. **Play**: pick the route, set the speed (m/s × multiplier) and optional
-   jitter, then tap **Play**. With **Stop at each stop** on (the default), the
+3. **Play**: the map fills the screen with a bottom sheet over it. Collapsed,
+   the sheet always shows **previous stop**, **play/pause**, **stop mocking**
+   and **next stop**, plus the mocking status. **Stop mocking** removes the test
+   providers so the device goes back to real GPS. Drag the sheet up for the
+   rest: speed (m/s × multiplier), optional jitter and **Along route**, which
+   jumps anywhere on the route, even while playing, with a percentage slider
+   and 0/25/50/75/100% presets. With **Stop at each stop** on (the default), the
    vehicle waits at every stop along the trip for the set time (default 20 s,
    scaled by the multiplier) and reports speed 0 while it waits. Stops show as
-   dots on the map and follow your route edits.
-   **Along route** jumps anywhere on the route, even while playing: a
-   percentage slider, 0/25/50/75/100% presets, and **◀ Prev stop** /
-   **Next stop ▶**. The map shows the position with a heading arrow
-   and follows it while *Keep map centered* is on. Scrub with the position
-   slider. **Stop mocking** removes the test providers so the device goes back
-   to real GPS.
+   dots on the map and follow your route edits. The map shows the position
+   with a heading arrow and follows it while *Keep map centered* is on.
 
 Maps use MapLibre with OpenStreetMap raster tiles (no API key), sent with an
 identifying User-Agent as the OSM tile policy requires.
