@@ -69,16 +69,17 @@ data class PlayerState(
     val playing: Boolean = false,
     /** Distance along the polyline in meters. */
     val progressMeters: Double = 0.0,
-    /** Speed in meters per second (before speedMultiplier). */
-    val baseSpeedMps: Double = 15.0, // ~54 km/h — reasonable urban transit default
-    val speedMultiplier: Double = 1.0,
+    /** Travel speed in meters per second. The UI shows and sets it in mph. */
+    val speedMps: Double = 30 * MPS_PER_MPH, // reasonable urban transit default
     val autoPan: Boolean = true,
     val jitter: JitterSettings = JitterSettings(),
     /** Pause at each of the route's stops for [dwellSec]. */
     val stopAtStops: Boolean = true,
-    /** Time stopped at each stop (scaled by speedMultiplier, like travel). */
+    /** Seconds stopped at each stop. */
     val dwellSec: Int = 20,
 )
+
+const val MPS_PER_MPH = 0.44704
 
 fun GtfsData.labelFor(trip: GtfsTrip): String {
     val route = routes.find { it.routeId == trip.routeId }

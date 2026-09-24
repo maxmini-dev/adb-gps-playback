@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import dev.maxmini.gpsplayback.AppStore
 import dev.maxmini.gpsplayback.R
 import dev.maxmini.gpsplayback.core.model.EditableRoute
+import dev.maxmini.gpsplayback.core.model.MPS_PER_MPH
 import dev.maxmini.gpsplayback.core.model.PlayerState
 import dev.maxmini.gpsplayback.core.playback.PlaybackEngine
 import dev.maxmini.gpsplayback.mock.MockLocationSink
@@ -188,7 +189,7 @@ class PlaybackService : Service() {
         val player = AppStore.player.value
         val total = route?.let { totalMeters(it) } ?: 0.0
         val pct = if (total > 0) (player.progressMeters / total).coerceIn(0.0, 1.0) else 0.0
-        val speed = PlaybackEngine.effectiveSpeed(player) * 3.6
+        val mph = player.speedMps / MPS_PER_MPH
 
         val toggle = if (player.playing) {
             NotificationCompat.Action(R.drawable.ic_pause, "Pause", servicePending(ACTION_PAUSE))
@@ -204,9 +205,9 @@ class PlaybackService : Service() {
             .setSmallIcon(R.drawable.ic_stat_location)
             .setContentTitle(route?.label ?: getString(R.string.app_name))
             .setContentText(
-                "%s · %.2f / %.2f km · %.0f km/h".format(
+                "%s · %.2f / %.2f km · %.0f mph".format(
                     if (player.playing) "Playing" else "Paused",
-                    player.progressMeters / 1000, total / 1000, speed,
+                    player.progressMeters / 1000, total / 1000, mph,
                 ),
             )
             .setProgress(1000, (pct * 1000).toInt(), false)

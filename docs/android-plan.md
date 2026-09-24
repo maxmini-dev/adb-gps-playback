@@ -89,7 +89,7 @@ sync complains, and fix any compile errors before moving on to phase 4.
   whenever the route is edited.
 - With **Stop at each stop** on, the vehicle waits `dwellSec` (default 20 s,
   0–120 s) at each intermediate stop and reports speed 0 while waiting. Dwell
-  is scaled by the speed multiplier, and there's none at the terminus.
+  is in real seconds, and there's none at the terminus.
 - Routes staged before this change have no stops. Re-stage them.
 
 **Tried and removed:** following the timetable in real time with an

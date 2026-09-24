@@ -14,9 +14,9 @@ import kotlin.random.Random
 class PlaybackEngineTest {
     private val route = listOf(LatLon(0.0, 0.0), LatLon(0.01, 0.0)) // ~1112 m due north
 
-    @Test fun advancesBySpeedTimesMultiplier() {
+    @Test fun advancesBySpeed() {
         val engine = PlaybackEngine(route)
-        val s = PlayerState(playing = true, baseSpeedMps = 10.0, speedMultiplier = 2.0)
+        val s = PlayerState(playing = true, speedMps = 20.0)
         assertEquals(50.0, engine.advance(s, 2.5).progressMeters, 1e-9)
         assertEquals(s.copy(playing = false), engine.advance(s.copy(playing = false), 10.0))
     }
@@ -30,7 +30,7 @@ class PlaybackEngineTest {
 
     @Test fun fixHasBearingSpeedAndAccuracy() {
         val engine = PlaybackEngine(route)
-        val fix = engine.fixFor(PlayerState(playing = true, progressMeters = 556.0, baseSpeedMps = 12.0), 0.25)
+        val fix = engine.fixFor(PlayerState(playing = true, progressMeters = 556.0, speedMps = 12.0), 0.25)
         assertEquals(0.0, fix.bearingDegrees!!, 1e-6)
         assertEquals(12.0, fix.speedMps, 0.0)
         assertEquals(PlaybackEngine.BASE_ACCURACY_M, fix.accuracyMeters, 0.0)

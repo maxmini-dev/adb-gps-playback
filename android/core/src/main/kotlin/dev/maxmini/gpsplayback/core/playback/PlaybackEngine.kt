@@ -28,9 +28,8 @@ data class Fix(
  * tested. The service owns the clock and calls [advance] once per tick with the
  * real elapsed time, so an irregular tick rate never changes playback speed.
  *
- * Moves at base speed × multiplier and, when `stopAtStops` is on, waits
- * `dwellSec` at each intermediate stop. Dwell time is scaled by the multiplier
- * too, so 10× fast-forwards the whole trip.
+ * Moves at `speedMps` and, when `stopAtStops` is on, waits `dwellSec` real
+ * seconds at each intermediate stop.
  */
 class PlaybackEngine(
     private val waypoints: List<LatLon>,
@@ -67,7 +66,7 @@ class PlaybackEngine(
             dwelling = false
             return state
         }
-        val base = state.baseSpeedMps
+        val speed = state.speedMps
         val useStops = state.stopAtStops && stopDistances.isNotEmpty() && state.dwellSec > 0
         var p = state.progressMeters
         val last = lastOut
@@ -76,7 +75,7 @@ class PlaybackEngine(
             dwellRemaining = 0.0
             dwelledStop = stopDistances.indexOfLast { it <= p + STOP_EPS_M }
         }
-        var tau = dtSeconds * state.speedMultiplier // scaled time budget for this tick
+        var tau = dtSeconds // time budget for this tick
         while (tau > 1e-9) {
             if (dwellRemaining > 0) {
                 val use = minOf(tau, dwellRemaining)
@@ -84,12 +83,12 @@ class PlaybackEngine(
                 tau -= use
                 continue
             }
-            if (base <= 0 || p >= totalMeters) break
+            if (speed <= 0 || p >= totalMeters) break
             val nextStop = if (useStops) dwelledStop + 1 else stopDistances.size
             val target = if (nextStop < stopDistances.size) minOf(stopDistances[nextStop], totalMeters) else totalMeters
-            val travel = base * tau
+            val travel = speed * tau
             if (p + travel >= target) {
-                tau -= (target - p) / base
+                tau -= (target - p) / speed
                 p = target
                 if (nextStop < stopDistances.size) {
                     dwelledStop = nextStop
@@ -116,7 +115,7 @@ class PlaybackEngine(
     /** The fix to send for [state]. [dtSeconds] drives how far the jitter walk moves. */
     fun fixFor(state: PlayerState, dtSeconds: Double): Fix {
         val truePos = pointAtDistance(waypoints, cum, state.progressMeters)
-        val speed = if (state.playing) speedOverride ?: effectiveSpeed(state) else 0.0
+        val speed = if (state.playing) speedOverride ?: state.speedMps else 0.0
         val bearing = bearingAtDistance(waypoints, cum, state.progressMeters)
         val jitter = state.jitter
         if (!jitter.enabled || jitter.sigmaMeters <= 0) {
@@ -153,8 +152,6 @@ class PlaybackEngine(
         const val BASE_ACCURACY_M = 3.0
         const val JITTER_CORRELATION_S = 10.0
         private const val STOP_EPS_M = 0.5
-
-        fun effectiveSpeed(state: PlayerState) = state.baseSpeedMps * state.speedMultiplier
 
         /** Distance of the first stop strictly ahead of [meters] (beyond a small tolerance), or null. */
         fun nextStopAfter(stopDistances: DoubleArray, meters: Double): Double? =

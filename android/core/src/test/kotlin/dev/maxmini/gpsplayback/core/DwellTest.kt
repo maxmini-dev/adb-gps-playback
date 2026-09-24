@@ -26,7 +26,7 @@ class DwellTest {
     @Test fun fixedSpeedStopsAtIntermediateStop() {
         val engine = PlaybackEngine(route, stops)
         val mid = engine.stopDistances[1]
-        val states = run(engine, PlayerState(playing = true, baseSpeedMps = 100.0, dwellSec = 10), 25)
+        val states = run(engine, PlayerState(playing = true, speedMps = 100.0, dwellSec = 10), 25)
         // Reaches the middle stop after ~5.6 s, holds there for 10 s, then moves on.
         assertEquals(mid, states[6].progressMeters, 1e-6)
         assertEquals(mid, states[14].progressMeters, 1e-6)
@@ -36,13 +36,13 @@ class DwellTest {
 
     @Test fun fixedSpeedWithoutStopsDoesNotDwell() {
         val engine = PlaybackEngine(route, stops)
-        val s = engine.advance(PlayerState(playing = true, baseSpeedMps = 100.0, stopAtStops = false), 7.0)
+        val s = engine.advance(PlayerState(playing = true, speedMps = 100.0, stopAtStops = false), 7.0)
         assertEquals(700.0, s.progressMeters, 1e-6)
     }
 
     @Test fun dwellReportsZeroSpeed() {
         val engine = PlaybackEngine(route, stops)
-        var s = PlayerState(playing = true, baseSpeedMps = 100.0, dwellSec = 10)
+        var s = PlayerState(playing = true, speedMps = 100.0, dwellSec = 10)
         repeat(7) { s = engine.advance(s, 1.0) }
         assertTrue(engine.dwelling)
         assertEquals(0.0, engine.fixFor(s, 1.0).speedMps, 0.0)

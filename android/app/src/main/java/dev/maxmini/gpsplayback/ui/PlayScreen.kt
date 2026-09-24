@@ -41,6 +41,7 @@ import dev.maxmini.gpsplayback.R
 import dev.maxmini.gpsplayback.core.geo.bearingAtDistance
 import dev.maxmini.gpsplayback.core.geo.cumulativeDistances
 import dev.maxmini.gpsplayback.core.geo.pointAtDistance
+import dev.maxmini.gpsplayback.core.model.MPS_PER_MPH
 import dev.maxmini.gpsplayback.core.model.PlayerState
 import dev.maxmini.gpsplayback.core.playback.PlaybackEngine
 import dev.maxmini.gpsplayback.playback.PlaybackService
@@ -49,7 +50,8 @@ import java.text.DateFormat
 import java.util.Date
 import kotlin.math.roundToInt
 
-private val MULTIPLIERS = listOf(0.5, 1.0, 2.0, 5.0, 10.0, 20.0)
+private const val MIN_MPH = 1
+private const val MAX_MPH = 90
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -223,21 +225,17 @@ private fun AlongRoute(progressMeters: Double, total: Double) {
 @Composable
 private fun SpeedPanel(player: PlayerState, hasStops: Boolean) {
     Section("Speed") {
-        val kmh = PlaybackEngine.effectiveSpeed(player) * 3.6
-        Muted("Base %.1f m/s × %s = %.0f km/h".format(player.baseSpeedMps, fmtMultiplier(player.speedMultiplier), kmh))
+        val mph = (player.speedMps / MPS_PER_MPH).roundToInt()
+        Muted("$mph mph")
         Slider(
-            value = player.baseSpeedMps.toFloat(),
-            onValueChange = { v -> AppStore.setPlayer(persist = false) { it.copy(baseSpeedMps = v.toDouble()) } },
+            value = mph.toFloat(),
+            onValueChange = { v ->
+                AppStore.setPlayer(persist = false) { it.copy(speedMps = v.roundToInt() * MPS_PER_MPH) }
+            },
             onValueChangeFinished = { AppStore.save() },
-            valueRange = 1f..40f,
+            valueRange = MIN_MPH.toFloat()..MAX_MPH.toFloat(),
+            steps = MAX_MPH - MIN_MPH - 1,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            MULTIPLIERS.forEach { m ->
-                val onClick = { AppStore.setPlayer { it.copy(speedMultiplier = m) } }
-                if (m == player.speedMultiplier) Button(onClick = onClick) { Text(fmtMultiplier(m)) }
-                else TextButton(onClick = onClick) { Text(fmtMultiplier(m)) }
-            }
-        }
         if (hasStops) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Stop at each stop", Modifier.weight(1f))
@@ -252,7 +250,7 @@ private fun SpeedPanel(player: PlayerState, hasStops: Boolean) {
 
 @Composable
 private fun DwellSlider(player: PlayerState) {
-    Muted("Time at each stop: ${player.dwellSec} s (scaled by the multiplier)")
+    Muted("Time at each stop: ${player.dwellSec} s")
     Slider(
         value = player.dwellSec.toFloat(),
         onValueChange = { v -> AppStore.setPlayer(persist = false) { it.copy(dwellSec = (v / 5).roundToInt() * 5) } },
@@ -286,8 +284,6 @@ private fun JitterPanel(player: PlayerState) {
         )
     }
 }
-
-private fun fmtMultiplier(m: Double) = if (m % 1.0 == 0.0) "${m.toInt()}×" else "$m×"
 
 @Composable
 private fun StatusLine(running: Boolean, error: String?, lastSentAt: Long?) {

@@ -42,7 +42,9 @@ through adb. Sideload-only personal tool, so there is no Play Store policy work.
 - **Stops come from the staged trip** (`GtfsParser.readTripStops`, read at
   stage time) and are projected onto the route by `projectStopsOntoRoute`
   every time the engine is built, so they follow edits. Dwell (`dwellSec`) is
-  scaled by the speed multiplier, and there's no dwell at the terminus.
+  in real seconds, and there's no dwell at the terminus.
+- **Speed is stored as `speedMps` and shown in mph.** There is no speed
+  multiplier; it was removed in favor of setting the speed directly.
 - **No schedule adherence for now.** Timetable-following, ahead/behind offsets
   and filtering trips by date/time were tried and removed as not worth the
   complexity (see `docs/android-plan.md`). Ask before bringing them back.

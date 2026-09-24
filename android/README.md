@@ -49,11 +49,11 @@ location from there rather than from the platform providers.
    the sheet always shows **previous stop**, **play/pause**, **stop mocking**
    and **next stop**, plus the mocking status. **Stop mocking** removes the test
    providers so the device goes back to real GPS. Drag the sheet up for the
-   rest: speed (m/s × multiplier), optional jitter and **Along route**, which
+   rest: speed (1–90 mph), optional jitter and **Along route**, which
    jumps anywhere on the route, even while playing, with a percentage slider
    and 0/25/50/75/100% presets. With **Stop at each stop** on (the default), the
-   vehicle waits at every stop along the trip for the set time (default 20 s,
-   scaled by the multiplier) and reports speed 0 while it waits. Stops show as
+   vehicle waits at every stop along the trip for the set number of seconds
+   (default 20 s) and reports speed 0 while it waits. Stops show as
    dots on the map and follow your route edits. The map shows the position
    with a heading arrow and follows it while *Keep map centered* is on.
 
