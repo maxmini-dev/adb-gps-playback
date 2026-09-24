@@ -1,57 +1,23 @@
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
-
 # Project: adb-gps-playback
 
-Web UI that replays GTFS routes as GPS fixes into a running Android emulator
-via `adb emu geo fix`. Single-user local dev tool — no auth, no persistence
-beyond `localStorage`, no multi-tenant concerns.
+Replays GTFS transit routes as mock GPS fixes on Android. There are two
+independent projects side by side, and they share no code:
 
-## Data flow
+| Dir | What | Agent rules |
+| --- | --- | --- |
+| `web/` | Next.js UI that pushes fixes into an **emulator** through `adb emu geo fix` | `web/AGENTS.md` |
+| `android/` | Native Kotlin/Compose app that mocks location **on the device** via test providers | `android/AGENTS.md` |
 
-```
-GTFS zip → lib/gtfs.ts (parse) → Zustand store → EditorMap / PlayerMap
-                                              ↓
-                              playback loop (rAF) → POST /api/adb → spawn adb
-```
+Read the `AGENTS.md` for whichever project you're working in before changing it.
+Both are single-user local dev tools: no auth and no backend beyond `web/app/api/adb`.
 
-- `lib/store.ts` (Zustand) holds `gtfs`, `routes` (staged/editable), and `player`.
-- Only `routes` and `player` are persisted to `localStorage` — raw GTFS stays in memory.
-- `app/api/adb/route.ts` resolves adb via `ADB_PATH` env or PATH. It's the
-  only server-side surface; everything else is client components.
+Cross-project rules:
 
-## Ground rules
-
-- **Leaflet must never SSR.** Import map components via `next/dynamic({ ssr: false })`.
-  `L`/react-leaflet touch `window` at import time.
-- **`adb emu geo fix` takes `<lon> <lat>`** in that order — the reverse of nearly
-  every other GPS API. Do not "fix" this.
-- **Keep dependencies minimal.** No shadcn, no icon libraries, no UI kits.
-  Shared styles live in `app/globals.css` as plain `.btn` / `.input` / `.card`
-  / `.badge` classes plus CSS custom-property design tokens.
-- **No tests exist yet.** If you add logic to `lib/geo.ts` or `lib/gtfs.ts`,
-  consider a lightweight test; do not scaffold a test framework without asking.
-- **GTFS shapes are optional.** If `shapes.txt` is missing/empty or a trip has
-  no `shape_id`, `parseGtfsZip` synthesizes a polyline from `stops.txt` +
-  `stop_times.txt`. Preserve this fallback.
-- **Playback throttling:** the rAF loop advances state every frame but only
-  POSTs to `/api/adb` ~4×/sec. Don't remove the throttle — the emulator geo
-  channel doesn't need more and it prevents backpressure.
-
-## Commands
-
-- `npm run dev` — dev server (Turbopack)
-- `npm run build` — production build; use this to check TypeScript
-- `npm run lint` — ESLint
-
-## When adding a feature
-
-1. If it touches map interaction, put the code in `app/components/EditorMap.tsx`
-   or `PlayerMap.tsx`. Don't split further unless it grows past ~200 lines.
-2. If it touches persisted state, extend the Zustand store rather than
-   introducing a second state mechanism.
-3. Update the README architecture diagram if you add a new module or
-   data-flow edge.
+- **Keep behavior aligned where it overlaps.** GTFS parsing (including the
+  stop-based fallback when `shapes.txt` is missing), route editing and playback
+  semantics should match. When you change one side's behavior, note in the PR
+  whether the other side needs the same change.
+- **Don't introduce code sharing** (e.g. Kotlin/JS or a shared TS package)
+  without asking. They are separate on purpose.
+- Planning notes live in `docs/`. The Android roadmap is `docs/android-plan.md`;
+  update its status table when you finish a phase.
