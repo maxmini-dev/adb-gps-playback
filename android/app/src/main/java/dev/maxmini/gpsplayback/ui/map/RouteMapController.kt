@@ -63,6 +63,8 @@ class RouteMapController(context: Context) {
     private var position: LatLon? = null
     private var bearing: Double? = null
     private var autoPan = false
+    private var insetTop = 0
+    private var insetBottom = 0
     private var editable = false
     private var onEdit: (RouteEdit) -> Unit = {}
 
@@ -72,6 +74,7 @@ class RouteMapController(context: Context) {
     private var renderedEditable: Boolean? = null
     private var fittedKey: String? = null
     private var pannedTo: LatLon? = null
+    private var appliedInsets: Pair<Int, Int>? = null
 
     // Waypoint drag / long-press state.
     private var touchIndex: Int? = null
@@ -117,6 +120,8 @@ class RouteMapController(context: Context) {
         autoPan: Boolean,
         editable: Boolean,
         onEdit: (RouteEdit) -> Unit,
+        insetTop: Int = 0,
+        insetBottom: Int = 0,
     ) {
         this.routeKey = routeKey
         this.waypoints = waypoints
@@ -124,6 +129,8 @@ class RouteMapController(context: Context) {
         this.position = position
         this.bearing = bearing
         this.autoPan = autoPan
+        this.insetTop = insetTop
+        this.insetBottom = insetBottom
         this.editable = editable
         this.onEdit = onEdit
         if (!editable) cancelTouch()
@@ -149,6 +156,14 @@ class RouteMapController(context: Context) {
         }
         s.getSourceAs<GeoJsonSource>(POSITION_SOURCE)?.setGeoJson(GeoJson.position(position, bearing))
 
+        val insets = insetTop to insetBottom
+        if (appliedInsets != insets) {
+            applyInsets(m)
+            appliedInsets = insets
+            // The visible area moved: re-fit the route and re-center on the position.
+            fittedKey = null
+            pannedTo = null
+        }
         if (fittedKey != routeKey && waypoints.isNotEmpty()) {
             if (mapView.width == 0 || mapView.height == 0) {
                 mapView.post { apply() } // Not laid out yet; bounds fitting needs a size.
@@ -165,6 +180,19 @@ class RouteMapController(context: Context) {
         }
     }
 
+    /**
+     * Keep the camera's center, the compass and the attribution inside the part
+     * of the map that isn't covered by overlays (see [update]'s insets).
+     */
+    private fun applyInsets(m: MapLibreMap) {
+        m.moveCamera(CameraUpdateFactory.paddingTo(0.0, insetTop.toDouble(), 0.0, insetBottom.toDouble()))
+        val margin = (8 * density).toInt()
+        val ui = m.uiSettings
+        ui.setCompassMargins(margin, insetTop + margin, margin, margin)
+        ui.setLogoMargins(margin, margin, margin, insetBottom + margin)
+        ui.setAttributionMargins(ui.attributionMarginLeft, margin, margin, insetBottom + margin)
+    }
+
     private fun fitRoute(m: MapLibreMap) {
         val distinct = waypoints.distinct()
         if (distinct.size < 2) {
@@ -173,7 +201,8 @@ class RouteMapController(context: Context) {
             return
         }
         val bounds = LatLngBounds.Builder().includes(distinct.map { LatLng(it.lat, it.lon) }).build()
-        m.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, (40 * density).toInt()))
+        val pad = (40 * density).toInt()
+        m.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, pad, insetTop + pad, pad, insetBottom + pad))
     }
 
     private fun setRouteGeometry(s: Style, points: List<LatLon>) {

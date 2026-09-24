@@ -7,6 +7,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -17,7 +20,9 @@ import dev.maxmini.gpsplayback.core.model.LatLon
 /**
  * MapLibre map of a route. Read-only with a moving position marker for Play;
  * with [editable] it shows waypoints and reports edits through [onEdit].
- * [routeKey] changing re-fits the camera to the route.
+ * [routeKey] changing re-fits the camera to the route. [insetTop] and
+ * [insetBottom] are the parts of the map covered by overlays: fitting and
+ * auto-pan center within the rest.
  */
 @Composable
 fun RouteMap(
@@ -30,8 +35,11 @@ fun RouteMap(
     autoPan: Boolean = false,
     editable: Boolean = false,
     onEdit: (RouteEdit) -> Unit = {},
+    insetTop: Dp = 0.dp,
+    insetBottom: Dp = 0.dp,
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val controller = remember { RouteMapController(context) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val currentOnEdit by rememberUpdatedState(onEdit)
@@ -58,7 +66,12 @@ fun RouteMap(
         factory = { controller.mapView },
         modifier = modifier,
         update = {
-            controller.update(routeKey, waypoints, stops, position, bearing, autoPan, editable) { currentOnEdit(it) }
+            controller.update(
+                routeKey, waypoints, stops, position, bearing, autoPan, editable,
+                onEdit = { currentOnEdit(it) },
+                insetTop = with(density) { insetTop.roundToPx() },
+                insetBottom = with(density) { insetBottom.roundToPx() },
+            )
         },
     )
 }

@@ -13,12 +13,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -86,6 +88,7 @@ fun PlayScreen(onNeedRoute: () -> Unit) {
     val density = LocalDensity.current
     // Peek height is measured from the peek content so it survives font scaling.
     var peekHeight by remember { mutableStateOf(0.dp) }
+    var pickerHeight by remember { mutableStateOf(0.dp) }
 
     BottomSheetScaffold(
         scaffoldState = sheetState,
@@ -122,17 +125,10 @@ fun PlayScreen(onNeedRoute: () -> Unit) {
             }
         },
     ) { padding ->
-        // The collapsed sheet sits over the bottom of the map; pad the map by the
-        // peek height so the route and position marker aren't hidden behind it.
-        Column(Modifier.fillMaxSize().padding(padding).padding(bottom = peekHeight)) {
-            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)) {
-                RoutePicker(route.label, routes.values.map { it.id to it.label }) { id ->
-                    if (id != route.id) {
-                        PlaybackService.stop(context)
-                        AppStore.setPlayer { it.copy(routeId = id, progressMeters = 0.0, playing = false) }
-                    }
-                }
-            }
+        // The map fills the screen under the route picker and the sheet. Its
+        // insets keep the fitted route and the auto-panned position centered in
+        // the part left visible between them.
+        Box(Modifier.fillMaxSize().padding(padding)) {
             RouteMap(
                 routeKey = route.id,
                 waypoints = route.waypoints,
@@ -140,8 +136,24 @@ fun PlayScreen(onNeedRoute: () -> Unit) {
                 position = position,
                 bearing = bearing,
                 autoPan = player.autoPan,
-                modifier = Modifier.fillMaxWidth().weight(1f),
+                insetTop = pickerHeight,
+                insetBottom = peekHeight,
+                modifier = Modifier.fillMaxSize(),
             )
+            Box(
+                Modifier.fillMaxWidth()
+                    .onSizeChanged { pickerHeight = with(density) { it.height.toDp() } }
+                    .padding(16.dp),
+            ) {
+                Surface(shape = ButtonDefaults.outlinedShape, shadowElevation = 3.dp) {
+                    RoutePicker(route.label, routes.values.map { it.id to it.label }) { id ->
+                        if (id != route.id) {
+                            PlaybackService.stop(context)
+                            AppStore.setPlayer { it.copy(routeId = id, progressMeters = 0.0, playing = false) }
+                        }
+                    }
+                }
+            }
         }
     }
 }

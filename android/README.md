@@ -45,7 +45,8 @@ location from there rather than from the platform providers.
    - **Tap** near the line to insert a point into the nearest segment
    - **Long-press** a point to delete it (a route always keeps at least 2)
    - **Reset** restores the original GTFS geometry
-3. **Play**: the map fills the screen with a bottom sheet over it. Collapsed,
+3. **Play**: the map fills the screen, with the route picker floating at the
+   top and a bottom sheet over it. Collapsed,
    the sheet always shows **previous stop**, **play/pause**, **stop mocking**
    and **next stop**, plus the mocking status. **Stop mocking** removes the test
    providers so the device goes back to real GPS. Drag the sheet up for the
@@ -55,7 +56,8 @@ location from there rather than from the platform providers.
    vehicle waits at every stop along the trip for the set number of seconds
    (default 20 s) and reports speed 0 while it waits. Stops show as
    dots on the map and follow your route edits. The map shows the position
-   with a heading arrow and follows it while *Keep map centered* is on.
+   with a heading arrow and, while *Keep map centered* is on, keeps it in the
+   middle of the uncovered part of the map, between the picker and the sheet.
 
 Maps use MapLibre with OpenStreetMap raster tiles (no API key), sent with an
 identifying User-Agent as the OSM tile policy requires.
